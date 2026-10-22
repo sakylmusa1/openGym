@@ -40,6 +40,8 @@ Framework preset: **Other**. Node 22. **Root Directory: the repository root.** L
 
 The Node source is `server/`, not a root `api/` directory. Vercel turns every `.js` file under a root `api/` directory into its own Serverless Function and counts those on top of anything the Build Output API emitted. Hobby allows 12 functions, and this server is one file plus about a hundred modules, so that detection rejects the deploy. The build copies `server/` into a single `.vercel/output/functions/api.func`, which is what the browser calls at `/api/*`. Do not rename `server/` back to `api/`.
 
+`scripts/vercel/build.mjs` writes `.vercel/output/config.json`: the `/api` rewrite, the static-file rules, and the security and cache headers (the same values as the Docker nginx config). `vercel.json` keeps the build commands and the one daily cron. It has no `headers`, `routes`, `rewrites`, `redirects`, or `functions` entry, so those are not applied a second time on top of the build output. The 300s limit is `maxDuration` on `api.func` only.
+
 ### Environment variables
 
 Set these on the Vercel project (Production, and Preview if you use it). A preview URL is a different host, so passkeys on a preview will not match production `RP_ID`.
@@ -100,7 +102,7 @@ Vercel Hobby runs a cron **once a day**. That is not enough for a reminder that 
 3. Schedule: every minute.
 4. Expect HTTP 200 and `{ "ok": true }`. 401 means the secret does not match.
 
-`vercel.json` also registers `GET /api/cron/daily` at 04:00 UTC. Vercel sends `Authorization: Bearer $CRON_SECRET` when that env var exists. The daily job repeats the tick and runs the Coach's scheduled reviews. If cron-job.org is down, reminders only fire if they fall inside the 15 minutes before that daily run.
+`vercel.json` registers `GET /api/cron/daily` at 04:00 UTC. That path and schedule are only in `vercel.json`. The build script leaves them out of `.vercel/output/config.json`: Vercel merges the two lists and rejects the deploy with `duplicated_cron_job` when both name the same job. Vercel sends `Authorization: Bearer $CRON_SECRET` when that env var exists. The daily job repeats the tick and runs the Coach's scheduled reviews. If cron-job.org is down, reminders only fire if they fall inside the 15 minutes before that daily run.
 
 ## 5. First account
 
