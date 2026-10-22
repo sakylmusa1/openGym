@@ -68,11 +68,11 @@ contrib/nix/
   api.nix            buildNpmPackage → bin/opengym-api
   mcp.nix            buildNpmPackage → bin/opengym-mcp
   default.nix        package-set aggregator (used by both the flake and the module); reads the
-                     release version from api/package.json
+                     release version from server/package.json
 ```
 
 Everything Nix lives under `contrib/nix/` so the flake stays out of the way of the project's own
-build (Docker, CI, the Node packages). The flake reads its sources — `api/`, `frontend/`, `mcp/`,
+build (Docker, CI, the Node packages). The flake reads its sources — `server/`, `frontend/`, `mcp/`,
 `catalogue/` — from the repository root two levels up, so it must be evaluated *from a checkout of
 the whole repo*, never from a sparse copy of `contrib/nix` alone.
 
@@ -104,7 +104,7 @@ inside it, the standard flow applies:
 
 ```bash
 cd frontend && npm install && npm run dev     # Vite dev server on :5173, proxies /api to :3000
-cd api && npm install && node server.js       # API on :3000
+cd server && npm install && node server.js       # API on :3000
 cd mcp && npm test                            # MCP server tests
 ```
 

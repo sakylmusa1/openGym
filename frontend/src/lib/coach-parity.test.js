@@ -1,6 +1,6 @@
 /* The server's copies of three tiny reading rules, pinned against the frontend's originals.
  *
- * api/coach/payload.js re-implements modeOf, isBw and isPerSide because the api container has
+ * server/coach/payload.js re-implements modeOf, isBw and isPerSide because the api container has
  * no build step in common with the frontend and does not copy frontend/ into its image. That
  * trade-off is fine; what is not fine is the copy drifting, which is exactly what happened
  * when v1.2.4 taught the app about bodyweight work and per-side reps: the server kept reading
@@ -13,7 +13,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { modeOf as uiModeOf, isBw as uiIsBw, isPerSide as uiIsPerSide } from './history.js'
-import { modeOf as srvModeOf, isBw as srvIsBw, isPerSide as srvIsPerSide } from '../../../api/coach/core/payload.js'
+import { modeOf as srvModeOf, isBw as srvIsBw, isPerSide as srvIsPerSide } from '../../../server/coach/core/payload.js'
 import { exOr } from './exercises.js'
 
 // Real ids from the catalogue, so `eq`/`bp` are whatever the dataset actually says rather than
@@ -74,7 +74,7 @@ describe('server/client reading rules agree', () => {
 // and the server does not know would be reset by every plan.
 import { GLYPHS, KNOWN_GLYPHS, glyphOf } from './glyphs.js'
 import { ICON_NAMES } from '../components/Icon.jsx'
-import { ROUTINE_GLYPHS, LEGACY_ROUTINE_GLYPHS, glyphStr } from '../../../api/coach/core/glyphs.js'
+import { ROUTINE_GLYPHS, LEGACY_ROUTINE_GLYPHS, glyphStr } from '../../../server/coach/core/glyphs.js'
 
 describe('routine glyphs', () => {
   it('the server offers exactly the glyphs the picker offers, each a real icon', () => {

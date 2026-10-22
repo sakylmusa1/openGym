@@ -14,7 +14,7 @@ import {
 } from './coach-demo.js'
 import { EXDB, EXIDX } from './exercises.js'
 import { planHash, validateProposal, applyChangeSet } from './coach.js'
-import { DATA_CATEGORIES } from '../../../api/coach/core/categories.js'
+import { DATA_CATEGORIES } from '../../../server/coach/core/categories.js'
 
 const DELAY = 2200                       // the module's own thinking time
 const NOW = new Date('2026-09-22T12:00:00Z').getTime()

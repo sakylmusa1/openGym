@@ -1,7 +1,7 @@
 // More than one passkey on a profile, and the one-time code that adds one on another device
 // (#95). Settings → Account lists the passkeys and offers both ways to add one; the sign-in screen
 // — or the link in the code's QR, opened on the other device — redeems a code. The rules are the
-// server's (api/passkeys-store.js, api/device-link.js and the passkeys block in api/server.js):
+// server's (server/passkeys-store.js, server/device-link.js and the passkeys block in server/server.js):
 // what needs proof, the last way in, how long a code lives. This only words them.
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store/useStore.js'
@@ -22,7 +22,7 @@ const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify(bo
 const errStyle = { color: 'var(--red)', marginTop: 10 }
 // A passkey prompt the person closed is their answer, not an error worth a line in red.
 const dismissed = e => e?.name === 'NotAllowedError' || e?.name === 'AbortError'
-// How long a code lives (api/device-link.js DEVICE_LINK_TTL_MS), for the sentence that says so.
+// How long a code lives (server/device-link.js DEVICE_LINK_TTL_MS), for the sentence that says so.
 const LINK_MINUTES = 10
 // The server keeps a creation challenge five minutes; one older than four is asked for again
 // rather than risked on a prompt that then fails.
@@ -40,7 +40,7 @@ const label = (p, i) => p.name || t('Passkey {0}', i + 1)
 const meta = p => [p.created && t('Added {0}', when(p.created)), p.lastUsed && t('Last used {0}', when(p.lastUsed))].filter(Boolean).join(' · ')
 
 // The server's refusal in the UI language. The proof codes are the password sheet's; the rest
-// are this feature's own (api/openapi.yaml, tag passkeys).
+// are this feature's own (server/openapi.yaml, tag passkeys).
 export function passkeyError(e) {
   // The authenticator already holds one of this profile's passkeys (excludeCredentials).
   if (e?.name === 'InvalidStateError') return t('This device already has a passkey for this profile.')
@@ -139,11 +139,11 @@ function PasskeySheet({ passkey, title, state, close, done }) {
   </>
 }
 
-/* Removing one asks for the proof adding one does (proveOwner in api/server.js): a copied
+/* Removing one asks for the proof adding one does (proveOwner in server/server.js): a copied
    session must not choose which of the owner's passkeys is left. The proof is the confirmation,
    so it is asked on the sheet that says what removing means; any passkey of the profile may give
    it, this one included. Removing does not end a session the passkey opened — sessions are not
-   tied to one (api/server.js) — which the sheet says, with the way to do that. */
+   tied to one (server/server.js) — which the sheet says, with the way to do that. */
 function RemovePasskeySheet({ passkey, title, state, close, done }) {
   const remove = async proof => {
     const r = await api('/api/account/passkeys?id=' + encodeURIComponent(passkey.id), { method: 'DELETE', body: JSON.stringify(proof) })

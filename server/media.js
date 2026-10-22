@@ -284,7 +284,7 @@ export function mp4Info(fd, size) {
  * would not pass the client's normalizeMediaRef, and a workout's list counts past the client's
  * cap of six. This set decides what is KEPT, so erring towards more is the safe direction.
  * `active` is not walked: PUT /api/data drops it before the state is stored.
- * frontend/src/lib/media-refs.js has to agree with it; api/test/fixtures/media-refs.json pins
+ * frontend/src/lib/media-refs.js has to agree with it; server/test/fixtures/media-refs.json pins
  * both to the same answers.
  */
 export function referencedHashes(state) {

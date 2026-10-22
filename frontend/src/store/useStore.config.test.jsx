@@ -36,7 +36,7 @@ describe('server config', () => {
 
   it('a sign-in re-asks only when the held copy was fetched without a session', async () => {
     // GET /api/config carries a `coach` key only for a session — the block, or null on an
-    // instance with no Coach (api/server.js). So no key means the copy came back
+    // instance with no Coach (server/server.js). So no key means the copy came back
     // unauthenticated, and coachAvailable() hangs every Coach entry point off that block.
     localStorage.clear()
     api.mockResolvedValueOnce({ invite_only: false, allow_guest: true })

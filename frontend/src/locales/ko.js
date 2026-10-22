@@ -1802,7 +1802,7 @@ export default {
   'This folder can’t be used for backups.': '이 폴더는 백업에 사용할 수 없습니다.',
   'openGym can no longer write to “{0}”, so copies go to Documents/openGym again. Choose the folder again to switch back.': 'openGym이 더 이상 “{0}”에 쓸 수 없어서 사본을 다시 Documents/openGym에 저장합니다. 그 폴더로 돌아가려면 다시 선택하세요.',
   'openGym can no longer write to the chosen folder, so copies go to Documents/openGym again. Choose the folder again to switch back.': 'openGym이 더 이상 선택한 폴더에 쓸 수 없어서 사본을 다시 Documents/openGym에 저장합니다. 그 폴더로 돌아가려면 다시 선택하세요.',
-  // --- missed-workout nudge (lib/nudge.js; the push copy is mirrored in api/nudge-copy.js) ---
+  // --- missed-workout nudge (lib/nudge.js; the push copy is mirrored in server/nudge-copy.js) ---
   'Nudge me when I skip a planned workout': '계획된 운동을 건너뛰면 알려 주기',
   'Nudge tone': '알림 말투',
   'Friendly': '다정하게',

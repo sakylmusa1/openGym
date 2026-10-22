@@ -43,16 +43,16 @@ in the thread; there's no objection, and no request to sit on it indefinitely.
 
 ## In scope
 
-- **`api/server.js`** — forging or replaying a session cookie, bypassing passkey verification,
+- **`server/server.js`** — forging or replaying a session cookie, bypassing passkey verification,
   reading or writing another user's data through `/api/data`, reaching `/api/admin/*` without
   being an admin, or creating a profile without a valid code while `INVITE_ONLY=1`. With
   `PASSWORD_LOGIN=1`: getting a password checked past the sign-in throttle, telling which names
   have a password, setting a password on someone else's profile, or using a reset code twice or
-  after it expired (`api/password.js`, `api/rate-limit.js`); reading another profile's sign-in
+  after it expired (`server/password.js`, `server/rate-limit.js`); reading another profile's sign-in
   e-mail without being an admin, setting one without the owner's proof, or dodging the account
   pause by switching between name and e-mail. Adding a passkey to a profile that
   is not yours, removing a profile's last way in, or redeeming a device code twice, after it
-  expired, or for a profile it was not made for (`api/passkeys-store.js`, `api/device-link.js`).
+  expired, or for a profile it was not made for (`server/passkeys-store.js`, `server/device-link.js`).
 - **Frontend** — XSS in the React app, or anything that lets a page on another origin read or
   change a signed-in user's data.
 - **Shipped deployment config** — `docker-compose.yml`, `web/nginx.conf.template`, the two Dockerfiles:
@@ -97,7 +97,7 @@ Read this before hosting openGym for anyone other than yourself.
 - **Passkeys by default.** No email addresses, no email reset flow. Registration and login are
   verified server-side by `@simplewebauthn/server` against `expectedOrigin: ORIGIN` and
   `expectedRPID: RP_ID`, and the authenticator's signature counter is stored and updated on every
-  login (the `POST /api/register/verify` and `POST /api/login/verify` handlers in `api/server.js`).
+  login (the `POST /api/register/verify` and `POST /api/login/verify` handlers in `server/server.js`).
 - **Passwords only if the instance asks for them.** With `PASSWORD_LOGIN=1` a profile may also
   set a password (nobody has one until they do). It is hashed with scrypt (N=2^15, r=8, p=1,
   16-byte random salt, parameters stored with the hash) and compared in constant time; a name
@@ -109,7 +109,7 @@ Read this before hosting openGym for anyone other than yourself.
   profile's only way in. Password routes keep the origin check below (no login CSRF).
   An admin can issue a one-time reset code — 60 random bits, stored as a SHA-256, 24 hours, single
   use — which also removes the old password and ends every session; admin accounts cannot be
-  reset that way (`api/password.js`, the password block in `api/server.js`).
+  reset that way (`server/password.js`, the password block in `server/server.js`).
 - **More than one passkey, and one-time device codes.** A profile can hold up to 20 passkeys.
   Adding one from Settings, removing one, or making the code that lets another device add its
   own, needs proof that the owner is there right now — a fresh assertion by one of that
@@ -124,7 +124,7 @@ Read this before hosting openGym for anyone other than yourself.
   `ORIGIN`/`RP_ID` like any other), and that passkey signs the device in. The redemption routes
   keep the origin check. A profile's last way in — its only passkey, unless a password can sign
   in — cannot be removed. Every addition, removal, code and redemption is audited
-  (`api/passkeys-store.js`, `api/device-link.js`, the passkeys block in `api/server.js`).
+  (`server/passkeys-store.js`, `server/device-link.js`, the passkeys block in `server/server.js`).
 - **Password sign-in is throttled.** Every password route spends a budget of 60 requests a minute
   per address; wrong passwords, reset codes and (on password signup) invite codes pause the
   address from the 21st on (30 s, doubling to 15 min); wrong passwords pause the *account* from the 6th on (1 min,
@@ -135,7 +135,7 @@ Read this before hosting openGym for anyone other than yourself.
   redemption only. Passkey sign-in, passkey signup and pairing are not throttled at all, so nobody
   can pause them — not even behind a proxy that shows the API one address for every visitor. The address is the socket peer unless
   `TRUST_PROXY=1` (set by the bundled compose file, where only the web container reaches the
-  API), and IPv6 is counted per /64 (`api/rate-limit.js`).
+  API), and IPv6 is counted per /64 (`server/rate-limit.js`).
 - **A sign-in e-mail is an identifier, never a channel.** With `PASSWORD_LOGIN=1` a profile may add
   an e-mail address to type at the password sign-in instead of its name. Nothing is ever sent to it
   (there is no mail server): no verification, no reset mail, so it is not proven to be anyone's
@@ -154,7 +154,7 @@ Read this before hosting openGym for anyone other than yourself.
   owner (`GET /api/account/password`) and to admins (`GET /api/admin/users`, `/api/admin/user`);
   it is not in `/api/me`, Coach payloads, the MCP bridge or plan sharing.
 - **Sessions are a signed cookie.** It carries `<uid>:<expiry>:<version>` plus an
-  HMAC-SHA256 tag over it, compared in constant time (`sign` and `verifySig` in `api/server.js`).
+  HMAC-SHA256 tag over it, compared in constant time (`sign` and `verifySig` in `server/server.js`).
   The key is 32 random bytes generated on first run and written to `./data/secret` with mode
   `0600` (`SECRET`). The cookie is `HttpOnly` and `SameSite=Lax`, and gets `Secure` **only
   when `ORIGIN` starts with `https:`** (`SECURE`, `sessionCookie`). On an https
@@ -182,7 +182,7 @@ Read this before hosting openGym for anyone other than yourself.
   so there is no rebinding window, and for literal IP addresses — which never go through that
   lookup — by the same address check at subscribe time and again before every send, applied to
   every textual form of the address (`isPrivateAddr`, `guardedLookup` and `pushEndpointError` in
-  `api/server.js`). Sends have a 10 s timeout
+  `server/server.js`). Sends have a 10 s timeout
   (a stalling endpoint used to hang the request handler indefinitely), run at most 6 at a time
   per notification,
   and each account is capped at 20 subscriptions, so one small request cannot become an unbounded
@@ -201,7 +201,7 @@ Read this before hosting openGym for anyone other than yourself.
   need the same session and origin check as every other write, are capped per file, per profile
   (`MEDIA_QUOTA_MB`), to 600 an hour and two at a time per profile, streamed to disk rather than
   held in memory, cut off after 60 s without a byte, and refused when the disk runs low
-  (`api/media.js`). The server never fetches anything a user supplies here: an exercise's link
+  (`server/media.js`). The server never fetches anything a user supplies here: an exercise's link
   is only ever opened by its owner's own tap, in a new browsing context with
   `noopener,noreferrer`, and the Coach cannot write one.
 - **There is an activity log.** Sign-ins, sign-outs, failed and refused attempts, and every admin
@@ -233,7 +233,7 @@ Read this before hosting openGym for anyone other than yourself.
   that same profile.
 - **Admins can read everything.** A user listed in `ADMIN_UIDS` (or flagged `admin: true` in
   `db.json`) gets every user's full history and body weight, can disable or delete accounts, and
-  can create or revoke invite codes (the `/api/admin/*` routes in `api/server.js`). Off by
+  can create or revoke invite codes (the `/api/admin/*` routes in `server/server.js`). Off by
   default — a fresh instance has no admin.
 - **Sessions can't be revoked one device at a time.** Revocation is per *account*, not per
   session: `POST /api/logout/all` kills all of them at once and there is no device list to pick

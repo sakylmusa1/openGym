@@ -170,7 +170,7 @@ describe('Settings: the passkey list', () => {
   })
 })
 
-/* Removing asks for the proof adding does (proveOwner in api/server.js), on the sheet that says
+/* Removing asks for the proof adding does (proveOwner in server/server.js), on the sheet that says
    what removing means: the tap that confirms it is the proof, and the proof goes with the removal
    and nothing else. */
 describe('Settings: removing a passkey', () => {

@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { auditCat, auditLabel, auditReason, auditLine, auditAct, fmtWhen } from './audit.js'
 
-// Every event name and reason code the server can emit, read off api/server.js itself rather
+// Every event name and reason code the server can emit, read off server/server.js itself rather
 // than kept as a second list here: the hand-kept copy silently missed the three pairing events
 // for several releases, and the dashboard printed 'auth.pair.create' at the operator (QA C18).
 // If a new one is added there without a label here, the first test fails rather than the
 // dashboard quietly printing a dotted identifier at a person.
-const SERVER = readFileSync(new URL('../../../api/server.js', import.meta.url), 'utf8')
+const SERVER = readFileSync(new URL('../../../server/server.js', import.meta.url), 'utf8')
 // Every quoted auth./admin./media. name, not only `audit(req, '…'`: a name with a hyphen
 // ('admin.first-user') or one picked by a ternary slipped past that pattern and reached the
 // dashboard raw.
@@ -66,7 +66,7 @@ describe('auditReason', () => {
 })
 
 describe('auditLine', () => {
-  it('reads the server lists off api/server.js, pairing events included', () => {
+  it('reads the server lists off server/server.js, pairing events included', () => {
     // Guards the extraction itself: an empty match would make the two loops above vacuous.
     expect(EVENTS).toEqual(expect.arrayContaining(['auth.login.ok', 'auth.pair.create', 'auth.pair.ok', 'auth.pair.fail', 'admin.audit.clear']))
     expect(REASONS).toEqual(expect.arrayContaining(['challenge-expired', 'code-invalid', 'user-unavailable']))

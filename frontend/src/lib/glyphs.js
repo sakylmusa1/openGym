@@ -41,7 +41,7 @@ const LEGACY = {
 
 // Every icon key a routine can hold: what the picker offers, what the first picker offered, and
 // what an old emoji maps onto. The Coach keeps exactly these when a plan comes back
-// (api/coach/core/glyphs.js; coach-parity.test.js holds the two lists together).
+// (server/coach/core/glyphs.js; coach-parity.test.js holds the two lists together).
 export const OLD_PICKER_GLYPHS = ['trophy', 'medal', 'crown', 'flag', 'star']
 export const KNOWN_GLYPHS = [...new Set([...GLYPHS, ...OLD_PICKER_GLYPHS, ...Object.values(LEGACY)])]
 

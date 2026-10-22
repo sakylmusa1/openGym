@@ -4,7 +4,7 @@
    though it was deleted since (QA 2026-10-06): the removal record used to delete it again, at once
    with "Merge them in" and on the next conflict of any other device with "Replace". And the
    replace must not wipe what another device synced while the confirm was open. The server below
-   answers like api/server.js (409 with the current document on a stale baseRev). */
+   answers like server/server.js (409 with the current document on a stale baseRev). */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../lib/api.js', () => ({ api: vi.fn(), setRemoteAuth: vi.fn() }))

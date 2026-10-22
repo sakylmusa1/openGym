@@ -1,5 +1,5 @@
 # openGym HTTP API: hand-written OpenAPI 3.1 spec.
-# Source of truth: api/server.js (a single framework-free Node file). Every route the
+# Source of truth: server/server.js (a single framework-free Node file). Every route the
 # server registers is documented here; if you add a route there, add it here too.
 # Browsable version: https://opengym.ch/api.html
 openapi: 3.1.0
@@ -2437,7 +2437,7 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
 
   # ---------------------------------------------------------------- AI Coach
-  # The routes live in api/coach/routes.js and are mixed into the same route table as
+  # The routes live in server/coach/routes.js and are mixed into the same route table as
   # everything above; they are inert (503) while the instance has no Coach enabled
   # and connected.
 

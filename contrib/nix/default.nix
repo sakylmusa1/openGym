@@ -4,9 +4,9 @@
 }:
 
 let
-  # The release version is whatever api/package.json says — the same file release:preflight
+  # The release version is whatever server/package.json says — the same file release:preflight
   # checks a v* tag against, so the Nix packages can never drift from the release they ship.
-  version = (builtins.fromJSON (builtins.readFile ../../api/package.json)).version;
+  version = (builtins.fromJSON (builtins.readFile ../../server/package.json)).version;
 in
 {
   opengym-frontend = callPackage ./frontend.nix { inherit version; };

@@ -10,15 +10,15 @@ const statics = [...src.matchAll(/^import .* from '([^']+)'/gm)].map(m => m[1])
 
 describe('CoachSetup keeps the core out until a mode is chosen', () => {
   it('imports only the provider table and the category names from the core', () => {
-    const core = statics.filter(p => p.includes('api/coach/core'))
-    expect(core.sort()).toEqual(['../../../api/coach/core/categories.js', '../../../api/coach/core/providers.js'])
+    const core = statics.filter(p => p.includes('server/coach/core'))
+    expect(core.sort()).toEqual(['../../../server/coach/core/categories.js', '../../../server/coach/core/providers.js'])
   })
   it('never statically imports the phone pipeline', () => {
     expect(statics.some(p => p.includes('coach-local'))).toBe(false)
     expect(src).toMatch(/import\('\.\.\/lib\/coach-local\.js'\)/)
   })
   it('the categories module carries no catalogue', () => {
-    const cat = readFileSync(new URL('../../../api/coach/core/categories.js', import.meta.url), 'utf8')
+    const cat = readFileSync(new URL('../../../server/coach/core/categories.js', import.meta.url), 'utf8')
     expect(cat).not.toMatch(/^import /m)
     expect(cat.length).toBeLessThan(1500)
   })

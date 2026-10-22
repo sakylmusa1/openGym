@@ -1,7 +1,7 @@
 /* Tiny synthetic media files for the media tests: just enough structure for the magic bytes, the
    header reads, the GIF block walk and the MP4 box walk, built in code so the repo carries no
    binary fixtures and every test says exactly which bytes it feeds in. The api side has its own
-   (api/test/media-samples.mjs); these add what only the client reads — dimensions, GIF frames,
+   (server/test/media-samples.mjs); these add what only the client reads — dimensions, GIF frames,
    tracks and sample tables. Not a *.test.js file, so vitest does not run it on its own. */
 
 export const bytes = (...parts) => {

@@ -1792,7 +1792,7 @@ export default {
   'This folder can’t be used for backups.': '此資料夾無法用於備份。',
   'openGym can no longer write to “{0}”, so copies go to Documents/openGym again. Choose the folder again to switch back.': 'openGym 已無法寫入「{0}」，所以副本會重新儲存到 Documents/openGym。重新選擇該資料夾即可改回。',
   'openGym can no longer write to the chosen folder, so copies go to Documents/openGym again. Choose the folder again to switch back.': 'openGym 已無法寫入所選資料夾，所以副本會重新儲存到 Documents/openGym。重新選擇該資料夾即可改回。',
-  // --- missed-workout nudge (lib/nudge.js; the push copy is mirrored in api/nudge-copy.js) ---
+  // --- missed-workout nudge (lib/nudge.js; the push copy is mirrored in server/nudge-copy.js) ---
   'Nudge me when I skip a planned workout': '跳過計畫訓練時提醒我',
   'Nudge tone': '提醒語氣',
   'Friendly': '友善',

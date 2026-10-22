@@ -1802,7 +1802,7 @@ export default {
   'This folder can’t be used for backups.': 'Ez a mappa nem használható mentésekhez.',
   'openGym can no longer write to “{0}”, so copies go to Documents/openGym again. Choose the folder again to switch back.': 'Az openGym már nem tud írni ide: „{0}”, így a másolatok ismét a Documents/openGym mappába kerülnek. Válaszd ki újra a mappát, hogy visszatérj hozzá.',
   'openGym can no longer write to the chosen folder, so copies go to Documents/openGym again. Choose the folder again to switch back.': 'Az openGym már nem tud írni a választott mappába, így a másolatok ismét a Documents/openGym mappába kerülnek. Válaszd ki újra a mappát, hogy visszatérj hozzá.',
-  // --- missed-workout nudge (lib/nudge.js; the push copy is mirrored in api/nudge-copy.js) ---
+  // --- missed-workout nudge (lib/nudge.js; the push copy is mirrored in server/nudge-copy.js) ---
   'Nudge me when I skip a planned workout': 'Bökj meg, ha kihagyok egy tervezett edzést',
   'Nudge tone': 'Bökés hangneme',
   'Friendly': 'Barátságos',

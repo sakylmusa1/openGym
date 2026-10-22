@@ -4,7 +4,7 @@
 // set itself: { min: 30, speed: 5.5, incline: 12, done: true }. It is optional everywhere. A set
 // without it is a flat one, exactly what every set logged before this was, so nothing stored is
 // ever rewritten and an older app that does not know the key leaves it alone (the server puts a
-// key it never knew back from the stored copy, api/sync-stamps.js keepKeys).
+// key it never knew back from the stored copy, server/sync-stamps.js keepKeys).
 import { isCustomEx } from './exercises.js'
 
 // Treadmills top out around 15 %, incline trainers at 40 %. Half a percent is the finest step

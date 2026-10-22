@@ -64,7 +64,7 @@ const maybeRestNotification = async () => {
   try {
     const reg = await navigator.serviceWorker?.getRegistration?.()
     if (!(await restAlertsOn(reg))) return
-    // Same tag as the server's push (api/push-messages.js): whichever lands second replaces the
+    // Same tag as the server's push (server/push-messages.js): whichever lands second replaces the
     // first instead of stacking a second banner. No body — it only repeated the title.
     // Android Chrome forbids the Notification constructor (Illegal constructor) - the
     // service-worker registration path is the one that actually pops there.

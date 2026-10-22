@@ -58,9 +58,9 @@ describe('normalizeMediaRef', () => {
 })
 
 describe('referencedHashes', () => {
-  // The same answers as api/media.js referencedHashes: the server keeps and the client keeps the
+  // The same answers as server/media.js referencedHashes: the server keeps and the client keeps the
   // same set. The fixture is the api tests' own.
-  const fixture = JSON.parse(readFileSync(new URL('../../../api/test/fixtures/media-refs.json', import.meta.url), 'utf8'))
+  const fixture = JSON.parse(readFileSync(new URL('../../../server/test/fixtures/media-refs.json', import.meta.url), 'utf8'))
   for (const c of fixture.referencedHashes) {
     it(`parity: ${c.name}`, () => {
       expect([...referencedHashes(c.state)].sort()).toEqual([...c.expect].sort())

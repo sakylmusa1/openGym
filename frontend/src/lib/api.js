@@ -78,7 +78,7 @@ async function request(url, init, ms) {
   finally { clearTimeout(timer) }
 }
 
-// Every route of the API answers JSON (api/server.js json()). A 2xx whose body is not JSON is
+// Every route of the API answers JSON (server/server.js json()). A 2xx whose body is not JSON is
 // therefore someone else's answer: Capacitor's local server on a phone that lost its pairing, an
 // auth proxy's login page, a proxy that sends /api/* to the app's index.html. Reading it as {}
 // made a push look accepted by a server "from before revisions" — the change was marked synced

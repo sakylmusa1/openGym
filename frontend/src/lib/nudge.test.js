@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { NUDGE_COPY, NUDGE_TONES, lineIndex, nudgeFor, nudgeMinute, toneOf } from './nudge.js'
 import { buildNudgeNotifications } from './mobile.js'
 
-// The same rules as api/nudge.js (api/test/nudge.test.js holds the mirror of these cases):
+// The same rules as server/nudge.js (server/test/nudge.test.js holds the mirror of these cases):
 // a planned day with nothing logged is a miss; 3 misses in a row since the last workout and it
 // goes quiet. 2026-09-07 is a Monday; Push on Mon/Wed/Fri.
 const routines = [{ id: 'push', name: 'Push' }, { id: 'pull', name: 'Pull' }]

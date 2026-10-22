@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Writes api/nudge-copy.js — the server's copy of the missed-workout nudge text — from the source
+// Writes server/nudge-copy.js — the server's copy of the missed-workout nudge text — from the source
 // of truth in the frontend: the English pool in frontend/src/lib/nudge.js and its translations in
 // frontend/src/locales. The api image carries no frontend, so the text has to live here too;
 // this keeps the two from drifting (test/nudge-copy.test.js fails when they have).
@@ -32,8 +32,8 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const text = await buildNudgeCopy();
   if (process.argv.includes('--check')) {
     const cur = fs.existsSync(OUT) ? fs.readFileSync(OUT, 'utf8') : '';
-    if (cur !== text) { console.error('api/nudge-copy.js is out of date: run node scripts/build-nudge-copy.mjs'); process.exit(1); }
-    console.log('api/nudge-copy.js is up to date.');
+    if (cur !== text) { console.error('server/nudge-copy.js is out of date: run node scripts/build-nudge-copy.mjs'); process.exit(1); }
+    console.log('server/nudge-copy.js is up to date.');
   } else {
     fs.writeFileSync(OUT, text);
     console.log('wrote', path.relative(process.cwd(), OUT));

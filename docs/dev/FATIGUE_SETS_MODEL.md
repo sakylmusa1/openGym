@@ -149,7 +149,7 @@ exactly as trained: heavy top sets plus light ramp volume.
   comparisons; contract changed, see above).
 - `node scripts/check-locales.mjs` — clean (2 new strings in all 16 packs,
   pt-BR fingerprint refreshed).
-- `cd api && npm test` — 471 pass / 2 fail, identical on clean tree
+- `cd server && npm test` — 471 pass / 2 fail, identical on clean tree
   (password-hash timing tests, unrelated).
 - `cd mcp && TZ=UTC npm test` — 63/63 (bare `npm test` fails on +07 machines
   for the pre-existing demoSeed/TZ reason, untouched by this change).

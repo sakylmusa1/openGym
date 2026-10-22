@@ -12,7 +12,7 @@ const { buildPrompt } = await import('../coach/core/prompt.js');
 
 const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'coach', 'prompts');
 
-test('core/prompts.js matches api/coach/prompts/*.md byte for byte', () => {
+test('core/prompts.js matches server/coach/prompts/*.md byte for byte', () => {
   const files = fs.readdirSync(dir).filter(f => f.endsWith('.md')).sort();
   assert.deepEqual(Object.keys(PROMPTS).sort(), files.map(f => f.replace(/\.md$/, '')));
   for (const f of files) {

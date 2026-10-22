@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Builds website/api.html (the static API reference) from api/openapi.yaml.
+// Builds website/api.html (the static API reference) from server/openapi.yaml.
 //
 //   node scripts/build-api-docs.mjs
 //   node scripts/build-api-docs.mjs --check   # fail if stale, never write (CI)
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url'
 import yaml from 'js-yaml'
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
-const specPath = path.join(root, 'api', 'openapi.yaml')
+const specPath = path.join(root, 'server', 'openapi.yaml')
 const outPath = path.join(root, 'website', 'api.html')
 const check = process.argv.includes('--check')
 const spec = yaml.load(fs.readFileSync(specPath, 'utf8'))
@@ -466,7 +466,7 @@ document.querySelectorAll('[data-xall]').forEach(b => b.addEventListener('click'
 
 const html = `<!DOCTYPE html>
 <!-- GENERATED FILE - do not edit by hand.
-     Built by scripts/build-api-docs.mjs from api/openapi.yaml (openGym API v${spec.info.version}).
+     Built by scripts/build-api-docs.mjs from server/openapi.yaml (openGym API v${spec.info.version}).
      Regenerate with: node scripts/build-api-docs.mjs -->
 <html lang="en">
 <head>
@@ -573,7 +573,7 @@ ${railTags}
      push, pairing, admin) as one hand-written
      OpenAPI&nbsp;spec. The same file lives
      <a href="https://github.com/DuarteSantos8/openGym/blob/main/api/openapi.yaml" rel="noopener">in the repository</a>
-     at <code>api/openapi.yaml</code>, next to the one server file it documents.</p>
+     at <code>server/openapi.yaml</code>, next to the one server file it documents.</p>
   <div class="actions api-actions">
     <a class="btn" href="openapi.yaml" download>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 19h16"/></svg>

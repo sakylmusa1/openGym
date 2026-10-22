@@ -89,12 +89,12 @@ describe('a language picked after coach-api.js loaded', () => {
 
 /* The composer, the quick actions and the intake toast a refused request by its class,
  * JOB_ERRORS[e.data?.code], and fall back to the server's English only where there is no line.
- * These read api/coach/routes.js, where the refusals are worded, and pin that every class it
+ * These read server/coach/routes.js, where the refusals are worded, and pin that every class it
  * sends has a line here. */
 describe('every refusal the server sends has a line here', () => {
   // Read by path, like Library.test.jsx reads index.css: under a DOM environment import.meta.url is
   // not a file URL. The suite runs from frontend/.
-  const routes = readFileSync(resolve(process.cwd(), '../api/coach/routes.js'), 'utf8')
+  const routes = readFileSync(resolve(process.cwd(), '../server/coach/routes.js'), 'utf8')
 
   // The guard in front of every Coach route answers 503 while the Coach is switched off or has
   // no provider. Its body carried the words and no class, so the app toasted the server's English.

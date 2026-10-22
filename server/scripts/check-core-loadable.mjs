@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Does api/coach/core/ still load under plain node?
+/* Does server/coach/core/ still load under plain node?
  *
  * The core is imported by two runtimes: the server under bare node, and the phone under Vite.
  * Vite forgives things node does not — `?raw`, `import.meta.glob`, JSON without an import
@@ -36,4 +36,4 @@ if (failed) {
   console.error(`\n${failed} module(s) do not load under plain node — the api would not start.`);
   process.exit(1);
 }
-console.log('\napi/coach/core loads under plain node.');
+console.log('\nserver/coach/core loads under plain node.');

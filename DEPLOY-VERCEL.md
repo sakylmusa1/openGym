@@ -36,7 +36,9 @@ If the browser still blocks the signed URL, the app sends the file through the A
 
 Hobby can import a personal GitHub repo. Import `sakylmusa1/openGym`. The repo's `vercel.json` builds the frontend, copies exercise media into the output with `scripts/catalogue/stage-media.mjs`, and publishes one Node function for `/api/*` via the Build Output API. Do not set an Output Directory in the dashboard; that would drop the function.
 
-Framework preset: **Other**. Node 22.
+Framework preset: **Other**. Node 22. **Root Directory: the repository root.** Leave it empty. Setting it to a subfolder still loads this root `vercel.json`, and the install then looks for `frontend/` and `server/` in the wrong place.
+
+The Node source is `server/`, not a root `api/` directory. Vercel turns every `.js` file under a root `api/` directory into its own Serverless Function and counts those on top of anything the Build Output API emitted. Hobby allows 12 functions, and this server is one file plus about a hundred modules, so that detection rejects the deploy. The build copies `server/` into a single `.vercel/output/functions/api.func`, which is what the browser calls at `/api/*`. Do not rename `server/` back to `api/`.
 
 ### Environment variables
 
@@ -128,9 +130,9 @@ export CRON_SECRET=$(openssl rand -hex 32)
 export RP_ID=localhost
 export ORIGIN=http://localhost:8080
 psql "$DATABASE_URL" -f supabase/migrations/20261022183055_opengym_persistence.sql
-cd api && node server.js
+cd server && node server.js
 ```
 
 `GET /api/cron/tick?secret=$CRON_SECRET` runs reminders and cleanups once. Unset `DATABASE_URL` and the same process is the file-backed server Docker uses.
 
-The API test `api/test/pg-vercel.test.js` applies the migration itself and skips when that URL is down. It does not read `DATABASE_URL` from the environment of the rest of the suite, so `cd api && npm test` stays on files unless Postgres is actually listening.
+The API test `server/test/pg-vercel.test.js` applies the migration itself and skips when that URL is down. It does not read `DATABASE_URL` from the environment of the rest of the suite, so `cd server && npm test` stays on files unless Postgres is actually listening.

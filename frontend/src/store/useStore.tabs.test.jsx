@@ -3,7 +3,7 @@
 /* Two tabs of one browser, one account (#283), and the other ways a client could write over
    newer server data without a 409. Each "tab" is a fresh import of the store (vi.resetModules),
    so two tabs are two closures sharing one localStorage, as in a browser. The server below
-   answers like api/server.js: GET /api/data and /api/data/rev, PUT /api/data refused with the
+   answers like server/server.js: GET /api/data and /api/data/rev, PUT /api/data refused with the
    current document when `baseRev` is given and not the current revision. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 

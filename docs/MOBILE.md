@@ -61,7 +61,7 @@ or Settings → Account → **"Connect to my server"** later) to finish. Notes:
   too — it's the same signed session token either way, just delivered over a header instead
   of a cookie. The phone has no passkey to sign back in with, so it has to be **paired
   again**; nothing on it is lost meanwhile (see below). See `/api/pair/create` and
-  `/api/pair/redeem` in `api/server.js` for the exchange itself.
+  `/api/pair/redeem` in `server/server.js` for the exchange itself.
 - Settings → Account → "Disconnect" first checks that your server has every change. If it has, the
   phone drops cleanly back to local mode. If not, it says how many changes are missing and
   offers **Try again**, **Export backup**, or **Disconnect anyway** — which keeps those

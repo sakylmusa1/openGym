@@ -1810,7 +1810,7 @@ export default {
   'This folder can’t be used for backups.': 'ใช้โฟลเดอร์นี้สำหรับสำรองข้อมูลไม่ได้',
   'openGym can no longer write to “{0}”, so copies go to Documents/openGym again. Choose the folder again to switch back.': 'openGym เขียนลงใน “{0}” ไม่ได้แล้ว สำเนาจึงกลับไปเก็บที่ Documents/openGym เลือกโฟลเดอร์อีกครั้งเพื่อกลับไปใช้',
   'openGym can no longer write to the chosen folder, so copies go to Documents/openGym again. Choose the folder again to switch back.': 'openGym เขียนลงในโฟลเดอร์ที่เลือกไม่ได้แล้ว สำเนาจึงกลับไปเก็บที่ Documents/openGym เลือกโฟลเดอร์อีกครั้งเพื่อกลับไปใช้',
-  // --- missed-workout nudge (lib/nudge.js; the push copy is mirrored in api/nudge-copy.js) ---
+  // --- missed-workout nudge (lib/nudge.js; the push copy is mirrored in server/nudge-copy.js) ---
   'Nudge me when I skip a planned workout': 'สะกิดฉันเมื่อข้ามการออกกำลังกายที่วางแผนไว้',
   'Nudge tone': 'น้ำเสียงการสะกิด',
   'Friendly': 'เป็นมิตร',

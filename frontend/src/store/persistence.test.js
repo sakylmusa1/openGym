@@ -23,7 +23,7 @@ const clone = o => JSON.parse(JSON.stringify(o))
 const exportBackup = S => JSON.stringify(S, null, 2)
 // Settings.jsx `doImport` → replaceState → persist, which normalizes on the way in.
 const importBackup = json => normalizeMeasurementsState(Object.assign(clone(DEF), JSON.parse(json)))
-// api/server.js `PUT /api/data` stores the blob verbatim, minus the in-progress workout.
+// server/server.js `PUT /api/data` stores the blob verbatim, minus the in-progress workout.
 const pushToServer = S => { const b = clone(S); delete b.active; return JSON.stringify({ state: b }) }
 // useStore.js `pullState` → persist, same overlay-then-normalize as the import path.
 const pullFromServer = wire => normalizeMeasurementsState(Object.assign(clone(DEF), JSON.parse(wire).state))

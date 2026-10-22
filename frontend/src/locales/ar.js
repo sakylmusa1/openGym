@@ -1854,7 +1854,7 @@ export default {
   'This folder can’t be used for backups.': 'لا يمكن استخدام هذا المجلد للنسخ الاحتياطية.',
   'openGym can no longer write to “{0}”, so copies go to Documents/openGym again. Choose the folder again to switch back.': 'لم يعد بإمكان openGym الكتابة في «{0}»، لذا تُحفظ النسخ في Documents/openGym من جديد. اختر المجلد مرة أخرى للعودة إليه.',
   'openGym can no longer write to the chosen folder, so copies go to Documents/openGym again. Choose the folder again to switch back.': 'لم يعد بإمكان openGym الكتابة في المجلد المختار، لذا تُحفظ النسخ في Documents/openGym من جديد. اختر المجلد مرة أخرى للعودة إليه.',
-  // --- missed-workout nudge (lib/nudge.js; the push copy is mirrored in api/nudge-copy.js) ---
+  // --- missed-workout nudge (lib/nudge.js; the push copy is mirrored in server/nudge-copy.js) ---
   'Nudge me when I skip a planned workout': 'نبّهني عندما أفوّت تمرينًا مخططًا',
   'Nudge tone': 'نبرة التنبيه',
   'Friendly': 'ودود',

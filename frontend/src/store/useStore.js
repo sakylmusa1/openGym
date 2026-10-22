@@ -397,7 +397,7 @@ export const useStore = create((set, get) => {
     } catch { /* storage refused — the copy in memory still knows */ }
   }
   const saveOwed = owed => { try { if (owed || storeLag) localStorage.setItem(DIRTY_KEY, '1'); else localStorage.removeItem(DIRTY_KEY) } catch { /* as above */ } }
-  // `wid`: the write id of the server's document at that revision (api/server.js PUT /api/data):
+  // `wid`: the write id of the server's document at that revision (server/server.js PUT /api/data):
   // the same `rev` after the server went back in time names a different document.
   const writeSync = (rev, ts, wid) => {
     const base = { rev, ts: ts || 0, ...(typeof wid === 'string' ? { wid } : {}) }
@@ -714,9 +714,9 @@ export const useStore = create((set, get) => {
     const asReplace = replaceRev
     replaceRev = null
     // `stamped`: this client stamps its own changes; the server stamps only for one that does not
-    // (api/sync-stamps.js).
+    // (server/sync-stamps.js).
     // An older app's owed copy over the revision it read: the server stamps what that app changed
-    // against the copy it holds, exactly as it would for that app (api/sync-stamps.js).
+    // against the copy it holds, exactly as it would for that app (server/sync-stamps.js).
     const legacy = readLegacy()
     const body = { state: S, stamped: !(legacy && legacy.owner === get().user?.id) }
     if (asReplace != null) { body.baseRev = asReplace.rev; if (asReplace.wid) body.baseWid = asReplace.wid }

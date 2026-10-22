@@ -17,8 +17,8 @@ import CoachSetup from './CoachSetup.jsx'
 import { getApiKey, setApiKey, clearApiKey } from '../lib/coach-secrets.js'
 import { localModels, localForget } from '../lib/coach-local.js'
 import { CATEGORY_TEXT } from '../lib/coach.js'
-import { HTTP_PROVIDERS } from '../../../api/coach/core/providers.js'
-import { DATA_CATEGORIES } from '../../../api/coach/core/categories.js'
+import { HTTP_PROVIDERS } from '../../../server/coach/core/providers.js'
+import { DATA_CATEGORIES } from '../../../server/coach/core/categories.js'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 

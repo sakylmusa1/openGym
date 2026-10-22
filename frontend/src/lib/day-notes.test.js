@@ -1,7 +1,7 @@
 // #261: a note on a day you did not train. The helpers, how two devices merge their notes, and
-// that the server's copy of the sync rules (api/sync-stamps.js) treats the map the same way.
+// that the server's copy of the sync rules (server/sync-stamps.js) treats the map the same way.
 import { describe, expect, it } from 'vitest'
-import * as Server from '../../../api/sync-stamps.js'
+import * as Server from '../../../server/sync-stamps.js'
 import { DAY_NOTE_TAGS, DAY_NOTE_LABEL, DAY_NOTE_ICON, canNoteDay, dayNoteLine, dayNoteOf, excusedOn, readDayNote, withDayNote } from './day-notes.js'
 import { highestStamp, localExtras, mergeStates, resetIdsOf, stampChange, STAMPED_MAPS } from './sync-merge.js'
 import { NOTE_MAX } from './history.js'

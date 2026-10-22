@@ -11,7 +11,7 @@ buildNpmPackage rec {
   pname = "opengym-api";
   inherit version;
 
-  src = ./../../api;
+  src = ./../../server;
 
   nodejs = nodejs_22;
 

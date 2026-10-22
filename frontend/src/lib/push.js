@@ -19,7 +19,7 @@ const bytesToUrlBase64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf))
 // the account's subscriptions belong to this device, so a rest-timer alert goes to the phone
 // that started the rest and not to every tab of the account. Nothing identifying in it.
 const DEVICE_KEY = 'gym_device'
-// The shape the server keeps, mirrored from deviceIdOf in api/server.js: anything else it treats
+// The shape the server keeps, mirrored from deviceIdOf in server/server.js: anything else it treats
 // as no id at all. A stored value outside it (set by hand, or left by some other build) went out
 // as it was, so the row kept no id, the boot sync saw that and sent it again, on every boot, and
 // the rest timer's alert went to every device. Such a value is replaced like a missing one.

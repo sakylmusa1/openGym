@@ -65,7 +65,7 @@ describe('deviceId', () => {
   })
 })
 
-// A server that applies the writes the way api/server.js does: the endpoint is stored from the
+// A server that applies the writes the way server/server.js does: the endpoint is stored from the
 // first POST on, under the device id sent if it has the shape deviceIdOf accepts, and under none
 // otherwise. Whatever state a boot starts from, the second boot must find nothing to write.
 describe('against a server that applies the writes, the second boot writes nothing', () => {

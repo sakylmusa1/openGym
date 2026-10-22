@@ -27,7 +27,7 @@ const local = await import('./coach-local.js')
 const { _resetCoachDevice, loadCoachDevice, saveCoachDevice } = await import('./coach-device.js')
 const { applyChangeSet, markStale, planHash } = await import('./coach.js')
 const { todayISO } = await import('./format.js')
-const { EXERCISES } = await import('../../../api/coach/core/library-data.js')
+const { EXERCISES } = await import('../../../server/coach/core/library-data.js')
 
 const EX = EXERCISES[0].id, EX2 = EXERCISES[1].id
 const state = () => ({

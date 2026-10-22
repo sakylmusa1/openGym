@@ -32,7 +32,7 @@ const copyApi = (from, to) => {
     else fs.copyFileSync(src, dest);
   }
 };
-copyApi(path.join(root, 'api'), func);
+copyApi(path.join(root, 'server'), func);
 fs.copyFileSync(path.join(root, 'scripts/vercel/function-entry.js'), path.join(func, 'index.js'));
 fs.writeFileSync(path.join(func, '.vc-config.json'), JSON.stringify({
   runtime: 'nodejs22.x',

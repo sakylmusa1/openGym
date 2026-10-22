@@ -8,7 +8,7 @@
 // lining every still up chronologically and a slider to compare two dates directly. Nothing new
 // to store, sync or back up — one more way to reach and to look at data the media system already
 // keeps, private to the account the same way everything else there is (DATA_DIR/uploads/<uid>/,
-// api/media.js).
+// server/media.js).
 import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'

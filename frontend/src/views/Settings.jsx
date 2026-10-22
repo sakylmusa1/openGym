@@ -1376,7 +1376,7 @@ function AccountIdRow({ id }) {
 
 // Lets the mobile app's "connect to my server" mode (lib/remote.js) authenticate without a
 // WebAuthn ceremony of its own — the code is minted here, from an already signed-in session,
-// and redeemed by the app for a bearer token. See /api/pair/create in api/server.js.
+// and redeemed by the app for a bearer token. See /api/pair/create in server/server.js.
 function PairSheet({ close }) {
   const [code, setCode] = useState(null)
   const [err, setErr] = useState(null)

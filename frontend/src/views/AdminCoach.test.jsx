@@ -59,7 +59,7 @@ vi.mock('../store/useUI.js', () => {
 
 /* ------------------------------ fixtures ------------------------------ */
 
-// Shaped exactly like GET /api/admin/coach in api/coach/routes.js.
+// Shaped exactly like GET /api/admin/coach in server/coach/routes.js.
 const PROVIDERS = [
   { id: 'anthropic', label: 'Claude', runtime: false, setupToken: true, deviceLogin: false, apiKey: true, http: true, baseUrl: false, keyOptional: false, keyPlaceholder: 'sk-ant-…', defaultModel: 'claude-sonnet-4', connected: true },
   { id: 'openai', label: 'OpenAI', runtime: false, setupToken: false, deviceLogin: false, apiKey: true, http: true, baseUrl: false, keyOptional: false, keyPlaceholder: 'sk-…', defaultModel: 'gpt-4o', connected: false },
