@@ -3,11 +3,14 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import https from 'node:https';
 import dns from 'node:dns';
 import net from 'node:net';
 import { pipeline } from 'node:stream/promises';
+import { pathToFileURL } from 'node:url';
 import {
   generateRegistrationOptions, verifyRegistrationResponse,
   generateAuthenticationOptions, verifyAuthenticationResponse
@@ -35,9 +38,19 @@ import { effectiveRoutineId } from './queue.js';
 import { stampPut } from './sync-stamps.js';
 import { atomicWrite as durableWrite } from './durable.js';
 import { excusedOn, nudgeFor, nudgeWindowOpen, toneOf } from './nudge.js';
+import * as pg from './pg/store.js';
+import { createPgMediaStore } from './pg/media.js';
 
 const PORT = +(process.env.PORT || 3000);
-const DATA = process.env.DATA_DIR || '/data';
+// Vercel has no /data mount. Postgres mode does not need one; a tmp dir keeps any
+// leftover path (a health probe, a coach job scratch file) from throwing ENOENT.
+const DATA = process.env.DATA_DIR || (process.env.VERCEL ? path.join(os.tmpdir(), 'opengym') : '/data');
+if (process.env.VERCEL) { try { fs.mkdirSync(DATA, { recursive: true }); } catch { /* tmp is there */ } }
+// A long-lived process (Docker, `node server.js`) keeps its own timers. A Vercel
+// function must not: an interval would pin the instance and the Hobby bill.
+const LIVE = !process.env.VERCEL;
+function every(fn, ms) { if (LIVE) setInterval(fn, ms).unref(); }
+if (pg.enabled()) pg.init();
 const RP_ID = process.env.RP_ID || 'localhost';
 const ORIGIN = process.env.ORIGIN || 'http://localhost:8080';
 const RP_NAME = process.env.RP_NAME || 'openGym';
@@ -84,7 +97,7 @@ const DEFAULT_LANG = (() => {
 // Whether the address a request came from may be read from the headers a proxy sets. Only the
 // sign-in throttle asks (limitAddress below); the bundled compose file sets it, because the API
 // is reachable there only through the web container, which overwrites those headers.
-const TRUST_PROXY = /^(1|true|yes|on)$/i.test(process.env.TRUST_PROXY || '');
+const TRUST_PROXY = /^(1|true|yes|on)$/i.test(process.env.TRUST_PROXY || '') || !!process.env.VERCEL;
 // 90 days keeps someone who trains a few times a week permanently signed in without a stolen
 // cookie staying good for a year. Overridable because a family instance and one on the open
 // internet don't want the same number. Only affects cookies minted from now on — the expiry is
@@ -111,8 +124,20 @@ const lock = f => { try { fs.chmodSync(path.join(DATA, f), 0o600); } catch { /* 
 
 /* ---------- secret + db ---------- */
 const secretFile = path.join(DATA, 'secret');
-if (!fs.existsSync(secretFile)) fs.writeFileSync(secretFile, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
-const SECRET = fs.readFileSync(secretFile, 'utf8').trim();
+// SESSION_SECRET wins when it is set, so a database restore cannot mint a new
+// signing key and log every device out. Otherwise the key is generated once and
+// kept in app_kv (Postgres) or ./data/secret (Docker).
+let SECRET;
+if (pg.enabled()) {
+  SECRET = (process.env.SESSION_SECRET || '').trim() || (pg.kvGet('secret') || '').trim();
+  if (!SECRET) {
+    SECRET = crypto.randomBytes(32).toString('hex');
+    pg.kvSet('secret', SECRET);
+  }
+} else {
+  if (!fs.existsSync(secretFile)) fs.writeFileSync(secretFile, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
+  SECRET = fs.readFileSync(secretFile, 'utf8').trim();
+}
 
 const dbFile = path.join(DATA, 'db.json');
 // Every account, passkey and invite. Only a missing file starts empty: an unreadable one (a write
@@ -121,17 +146,45 @@ const dbFile = path.join(DATA, 'db.json');
 // FIRST_USER_ADMIN the first visitor made admin. Now the damaged file is kept aside and the copy
 // saveDb keeps of each version it writes (db.json.bak) is used; with neither readable the server
 // refuses to start, saying why, rather than start as a new instance.
+// Postgres keeps the same pair as documents `db` and `db.bak`, compared-and-swapped on `rev`.
+let dbRowRev = 0;
+const parseDb = text => { const v = JSON.parse(text); if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('not an object'); return v; };
+function normalizeDb(v) {
+  v.users = v.users || [];
+  v.creds = v.creds || [];
+  v.subs = v.subs || [];
+  v.invites = v.invites || [];
+  v.deviceLinks = v.deviceLinks || [];   // unused one-time device links, hashed (device-link.js)
+  return v;
+}
 function loadDb() {
+  if (pg.enabled()) {
+    const row = pg.docGet('db');
+    if (!row) { dbRowRev = 0; return normalizeDb({ users: [], creds: [], subs: [], invites: [] }); }
+    dbRowRev = row.rev;
+    try { return normalizeDb(parseDb(row.body)); }
+    catch (err) {
+      console.error(`db document cannot be read (${err.message})`);
+      const bak = pg.docGet('db.bak');
+      try {
+        const parsed = normalizeDb(parseDb(bak.body));
+        console.error('db: using db.bak, the copy of the last save');
+        return parsed;
+      } catch {
+        console.error('db: no readable db.bak either. Refusing to start: restore the db document from a backup.');
+        process.exit(1);
+      }
+    }
+  }
   let raw;
   try { raw = fs.readFileSync(dbFile, 'utf8'); }
-  catch (e) { if (e.code === 'ENOENT') return { users: [], creds: [], subs: [], invites: [] }; throw e; }
-  const parse = text => { const v = JSON.parse(text); if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('not an object'); return v; };
-  try { return parse(raw); } catch (err) {
+  catch (e) { if (e.code === 'ENOENT') return normalizeDb({ users: [], creds: [], subs: [], invites: [] }); throw e; }
+  try { return normalizeDb(parseDb(raw)); } catch (err) {
     const aside = `${dbFile}.unreadable-${Date.now()}`;
     try { fs.copyFileSync(dbFile, aside); } catch { /* the original stays where it is anyway */ }
     console.error(`db.json cannot be read (${err.message}); kept a copy as ${path.basename(aside)}`);
     try {
-      const bak = parse(fs.readFileSync(dbFile + '.bak', 'utf8'));
+      const bak = normalizeDb(parseDb(fs.readFileSync(dbFile + '.bak', 'utf8')));
       console.error('db.json: using db.json.bak, the copy of the last save');
       return bak;
     } catch {
@@ -141,11 +194,12 @@ function loadDb() {
   }
 }
 let db = loadDb();
-db.users = db.users || [];
-db.creds = db.creds || [];
-db.subs = db.subs || [];
-db.invites = db.invites || [];
-db.deviceLinks = db.deviceLinks || [];   // unused one-time device links, hashed (device-link.js)
+// A second instance may have written since this process last did. Called at the start of
+// each Postgres request; file mode keeps the copy it loaded at boot.
+function reloadDb() {
+  if (!pg.enabled()) return;
+  db = loadDb();
+}
 const isAdmin = user => !!user && (user.admin === true || ADMIN_UIDS.includes(user.id));
 // 0600: db.json holds passkey credential material. It used to be covered by a blanket 0700 on
 // the whole directory; now that the directory stays traversable, the file carries its own mode.
@@ -153,7 +207,21 @@ const isAdmin = user => !!user && (user.admin === true || ADMIN_UIDS.includes(us
 // way: loadDb falls back to it. A copy of the version being replaced, as it used to be, lost
 // whatever the last save wrote (a profile just created) when db.json was later found unreadable.
 // A write cut short leaves the previous db.json.bak whole (temporary file and rename).
+// Postgres uses the row's rev as the compare-and-swap: a lost race throws 503 rather than
+// clobbering the other instance's accounts.
 function saveDb() {
+  if (pg.enabled()) {
+    const text = JSON.stringify(db);
+    const r = pg.docCas('db', text, dbRowRev);
+    if (!r.ok) {
+      reloadDb();
+      throw new HttpError(503, 'please retry');
+    }
+    dbRowRev = r.rev;
+    try { pg.docPut('db.bak', text); }
+    catch (e) { console.error('db.bak could not be written', e.message); }
+    return;
+  }
   const text = JSON.stringify(db, null, 2);
   atomicWrite(dbFile, text, 0o600);
   try { atomicWrite(dbFile + '.bak', text, 0o600); }
@@ -166,6 +234,8 @@ function atomicWrite(file, content, mode) { durableWrite(file, content, mode); }
 // synced more writes ago than this merges on its next pull instead of taking the server's copy.
 const WID_KEEP = 50;
 const stateFile = uid => path.join(DATA, 'state-' + uid.replace(/[^a-zA-Z0-9_-]/g, '') + '.json');
+const stateId = uid => 'state:' + String(uid).replace(/[^a-zA-Z0-9_-]/g, '');
+const stateRevs = new Map(); // uid -> documents.rev, for the compare-and-swap on the next write
 // When a profile last fetched its document (GET /api/data). The document's own `_ts` moves only
 // on a push, so a device that only ever read — a second phone, a profile that trains elsewhere
 // and just looks — showed "last sync never" in the admin dashboard (QA 1.3.9). Kept on the user
@@ -179,6 +249,12 @@ function notePull(user, now = Date.now()) {
 // The later of the last push and the last pull.
 const lastSyncOf = (u, S) => Math.max(S?._ts || 0, u?.lastPull || 0) || null;
 function readState(uid) {
+  if (pg.enabled()) {
+    const row = pg.docGet(stateId(uid));
+    if (!row) { stateRevs.delete(uid); return null; }
+    stateRevs.set(uid, row.rev);
+    try { return JSON.parse(row.body); } catch { return null; }
+  }
   try { return JSON.parse(fs.readFileSync(stateFile(uid), 'utf8')); } catch { return null; }
 }
 // GET and PUT /api/data tell a profile with no state yet from one whose file cannot be read: the
@@ -186,10 +262,34 @@ function readState(uid) {
 // replace, losing what a restore could still bring back.
 const UNREADABLE = Symbol('unreadable');
 function readStateStrict(uid) {
+  if (pg.enabled()) {
+    const row = pg.docGet(stateId(uid));
+    if (!row) { stateRevs.delete(uid); return null; }
+    stateRevs.set(uid, row.rev);
+    try { return JSON.parse(row.body); } catch { return UNREADABLE; }
+  }
   let raw;
   try { raw = fs.readFileSync(stateFile(uid), 'utf8'); }
   catch (e) { return e.code === 'ENOENT' ? null : UNREADABLE; }
   try { return JSON.parse(raw); } catch { return UNREADABLE; }
+}
+function writeState(uid, text) {
+  stateCache.delete(uid);
+  if (!pg.enabled()) { atomicWrite(stateFile(uid), text); return; }
+  const expected = stateRevs.get(uid) || 0;
+  const r = pg.docCas(stateId(uid), text, expected);
+  if (!r.ok) {
+    const err = new HttpError(409, 'conflict');
+    err.state = readStateStrict(uid);
+    throw err;
+  }
+  stateRevs.set(uid, r.rev);
+}
+function unlinkState(uid) {
+  stateCache.delete(uid);
+  stateRevs.delete(uid);
+  if (pg.enabled()) { try { pg.docDel(stateId(uid)); } catch { /* already gone */ } return; }
+  try { fs.unlinkSync(stateFile(uid)); } catch { /* already gone */ }
 }
 // A stored document as a client gets it: without the server's own notes `_unstamped` and `_prior`.
 function forClient(S) {
@@ -211,8 +311,19 @@ const records = v => (Array.isArray(v) ? v.filter(record) : []);
 /* ---------- push notifications (Web Push / VAPID) ---------- */
 const vapidFile = path.join(DATA, 'vapid.json');
 let vapid;
-try { vapid = JSON.parse(fs.readFileSync(vapidFile, 'utf8')); }
-catch { vapid = webpush.generateVAPIDKeys(); fs.writeFileSync(vapidFile, JSON.stringify(vapid), { mode: 0o600 }); }
+if (pg.enabled()) {
+  const pub = (process.env.VAPID_PUBLIC_KEY || '').trim();
+  const priv = (process.env.VAPID_PRIVATE_KEY || '').trim();
+  if (pub && priv) vapid = { publicKey: pub, privateKey: priv };
+  else {
+    const stored = pg.kvGet('vapid');
+    vapid = stored ? JSON.parse(stored) : webpush.generateVAPIDKeys();
+    if (!stored) pg.kvSet('vapid', JSON.stringify(vapid));
+  }
+} else {
+  try { vapid = JSON.parse(fs.readFileSync(vapidFile, 'utf8')); }
+  catch { vapid = webpush.generateVAPIDKeys(); fs.writeFileSync(vapidFile, JSON.stringify(vapid), { mode: 0o600 }); }
+}
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || (SECURE ? ORIGIN : 'mailto:admin@localhost');
 webpush.setVapidDetails(VAPID_SUBJECT, vapid.publicKey, vapid.privateKey);
 
@@ -397,20 +508,59 @@ async function sendPush(userId, payload, deviceId) {
 // In memory only — an API restart drops whatever is pending.
 const restTimers = new Map(); // `${userId}:${deviceId}` -> Timeout
 const restKey = (userId, deviceId) => `${userId}:${deviceId || ''}`;
-function scheduleRestTimer(userId, deviceId, sec, lang) {
+// On a long-lived process the timer is exact. On Vercel the row is what survives the
+// request: a waitUntil covers rests up to about four minutes, and the minute cron tick
+// sends anything still due (up to ~60s late). Claiming the row is what stops both from firing.
+function armLocalRest(userId, deviceId, lang, fireAt) {
+  if (!LIVE) return;
   const k = restKey(userId, deviceId);
   const t = restTimers.get(k);
   if (t) clearTimeout(t);
   restTimers.set(k, setTimeout(() => {
     restTimers.delete(k);
+    if (pg.enabled()) {
+      const row = pg.restClaim(k);
+      if (!row) return;
+    }
     sendPush(userId, restTimerPush(lang), deviceId);
-  }, sec * 1000));
+  }, Math.max(0, fireAt - Date.now())));
+}
+function armWaitUntil(userId, deviceId, lang, fireAt) {
+  const k = restKey(userId, deviceId);
+  import('@vercel/functions').then(({ waitUntil }) => {
+    waitUntil((async () => {
+      await new Promise(r => setTimeout(r, Math.max(0, fireAt - Date.now())));
+      const row = pg.restClaim(k);
+      if (!row) return;
+      await sendPush(row.userId, restTimerPush(row.lang), row.deviceId || undefined);
+    })());
+  }).catch(() => { /* the minute tick sends it */ });
+}
+function scheduleRestTimer(userId, deviceId, sec, lang) {
+  const fireAt = Date.now() + sec * 1000;
+  if (pg.enabled()) {
+    pg.restUpsert({ key: restKey(userId, deviceId), userId, deviceId: deviceId || null, lang: lang || null, fireAt });
+    if (process.env.VERCEL && sec <= 240) armWaitUntil(userId, deviceId, lang, fireAt);
+  }
+  armLocalRest(userId, deviceId, lang, fireAt);
 }
 function cancelRestTimer(userId, deviceId) {
+  if (pg.enabled()) pg.restCancel(userId, deviceId || null);
   // no device id: an older client — clear everything the account has pending, as it always did
   for (const [k, t] of restTimers) {
     if (deviceId ? k === restKey(userId, deviceId) : k.startsWith(userId + ':')) { clearTimeout(t); restTimers.delete(k); }
   }
+}
+async function fireDueRests() {
+  if (!pg.enabled()) return 0;
+  const due = pg.restDue(Date.now());
+  for (const row of due) {
+    const t = restTimers.get(row.key);
+    if (t) { clearTimeout(t); restTimers.delete(row.key); }
+    try { await sendPush(row.userId, restTimerPush(row.lang), row.deviceId || undefined); }
+    catch (e) { console.error('rest push', row.userId, e.message); }
+  }
+  return due.length;
 }
 // A device id is what the browser made up for itself (lib/push.js): one short token per browser
 // profile, nothing identifying. Anything else is treated as absent.
@@ -464,19 +614,27 @@ const STATE_CACHE_MAX = 64;
 const STATE_CACHE_TTL_MS = Math.max(50, +(process.env.STATE_CACHE_TTL_MS || 600000) || 600000);
 const stateCache = new Map(); // uid -> { mtimeMs, size, hitAt, S }
 function readStateCached(uid) {
-  let st;
-  try { st = fs.statSync(stateFile(uid)); } catch { stateCache.delete(uid); return null; }
   const now = Date.now();
   for (const [k, v] of stateCache) if (now - v.hitAt > STATE_CACHE_TTL_MS) stateCache.delete(k);
+  let st;
+  if (pg.enabled()) {
+    st = pg.docStat(stateId(uid));
+    if (!st) { stateCache.delete(uid); return null; }
+  } else {
+    try { st = fs.statSync(stateFile(uid)); } catch { stateCache.delete(uid); return null; }
+  }
   const hit = stateCache.get(uid);
   stateCache.delete(uid);                       // re-inserted below, so the map stays in hit order
-  if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) {
+  const same = pg.enabled()
+    ? hit && hit.rev === st.rev && hit.size === st.size
+    : hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size;
+  if (same) {
     hit.hitAt = now;
     stateCache.set(uid, hit);
     return hit.S;
   }
   const S = readState(uid);
-  stateCache.set(uid, { mtimeMs: st.mtimeMs, size: st.size, hitAt: now, S });
+  stateCache.set(uid, { mtimeMs: st.mtimeMs, rev: st.rev, size: st.size, hitAt: now, S });
   while (stateCache.size > STATE_CACHE_MAX) stateCache.delete(stateCache.keys().next().value);
   return S;
 }
@@ -497,7 +655,7 @@ function nudgeTick(user, S, now) {
   saveDb();
   sendPush(user.id, nudgePush(S.lang, toneOf(S.reminder), routine, now.date));
 }
-setInterval(() => {
+function reminderPass() {
   for (const user of db.users) {
     if (!db.subs.some(s => s.userId === user.id)) continue;
     // One user's state file is one user's problem: a shape this tick cannot read is logged and
@@ -527,7 +685,8 @@ setInterval(() => {
   }
 // Checked every 10s (not 60s) — ticks aren't aligned to the top of the minute, so a 60s
 // interval could sit on your target minute for up to 59s before noticing. 10s caps that at ~9s.
-}, REMINDER_TICK_MS).unref();
+}
+every(reminderPass, REMINDER_TICK_MS);
 
 /* ---------- sessions (signed cookie) ---------- */
 function sign(payload) {
@@ -690,18 +849,21 @@ const challenges = new Map(); // cid -> {kind, challenge, name?, uid?, exp}
 // so only a flood far beyond any real sign-in traffic reaches back far enough to cost one.
 const MAX_CHALLENGES = 20000;
 function putChallenge(data) {
-  while (challenges.size >= MAX_CHALLENGES) challenges.delete(challenges.keys().next().value);
   const cid = crypto.randomBytes(16).toString('base64url');
-  challenges.set(cid, { ...data, exp: Date.now() + 5 * 60000 });
+  const exp = Date.now() + 5 * 60000;
+  if (pg.enabled()) { pg.challengePut(cid, { ...data, exp }, exp); return cid; }
+  while (challenges.size >= MAX_CHALLENGES) challenges.delete(challenges.keys().next().value);
+  challenges.set(cid, { ...data, exp });
   return cid;
 }
 function takeChallenge(cid) {
+  if (pg.enabled()) return pg.challengeTake(String(cid || '')) || null;
   const c = challenges.get(cid);
   challenges.delete(cid);
   if (!c || c.exp < Date.now()) return null;
   return c;
 }
-setInterval(() => { for (const [k, v] of challenges) if (v.exp < Date.now()) challenges.delete(k); }, 60000).unref();
+every(() => { for (const [k, v] of challenges) if (v.exp < Date.now()) challenges.delete(k); }, 60000);
 
 // ---------- device pairing (mobile app "connect to my server", no WebAuthn ceremony) ----------
 // A passkey ceremony can't run inside the app's WebView (its origin never matches RP_ID), so the
@@ -713,10 +875,28 @@ function makePairCode() {
   let code;
   do {
     code = Array.from(crypto.randomBytes(8)).map(b => PAIR_CODE_ALPHABET[b % PAIR_CODE_ALPHABET.length]).join('');
-  } while (pairings.has(code));
+  } while (pg.enabled() ? pg.pairExists(code) : pairings.has(code));
   return code;
 }
-setInterval(() => { for (const [k, v] of pairings) if (v.exp < Date.now()) pairings.delete(k); }, 60000).unref();
+function dropPairings(uid) {
+  if (pg.enabled()) { pg.pairDropUser(uid); return; }
+  for (const [k, v] of pairings) if (v.uid === uid) pairings.delete(k);
+}
+function mintPairing(uid) {
+  dropPairings(uid);
+  const code = makePairCode();
+  const exp = Date.now() + 5 * 60000;
+  if (pg.enabled()) pg.pairPut(code, uid, exp);
+  else pairings.set(code, { uid, exp });
+  return code;
+}
+function takePairing(code) {
+  if (pg.enabled()) return pg.pairTake(code);
+  const p = pairings.get(code);
+  if (p) pairings.delete(code);
+  return p || null;
+}
+every(() => { for (const [k, v] of pairings) if (v.exp < Date.now()) pairings.delete(k); }, 60000);
 
 /* ---------- helpers ---------- */
 function json(res, code, obj, extraHeaders) {
@@ -756,8 +936,13 @@ function readBody(req) {
     req.on('end', () => {
       if (over) return;
       if (!chunks.length) return resolve({});
+      let buf = Buffer.concat(chunks);
+      if (String(req.headers['content-encoding'] || '').includes('gzip')) {
+        try { buf = zlib.gunzipSync(buf, { maxOutputLength: 32 * 1024 * 1024 }); }
+        catch { return reject(new HttpError(400, 'invalid json')); }
+      }
       let body;
-      try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+      try { body = JSON.parse(buf.toString('utf8')); }
       catch { return reject(new HttpError(400, 'invalid json')); }
       // Every handler reads fields off the result, so a JSON `null`, string, number or array is
       // as much a client mistake as unparseable text — refused once here rather than dereferenced
@@ -793,14 +978,39 @@ const PRESENCE_HIDDEN_GRACE = 45000;
 // sweep below both ask here.
 const presenceListed = (p, now) =>
   now - p.updatedAt < PRESENCE_TTL && (p.hiddenAt === undefined || now - p.hiddenAt < PRESENCE_HIDDEN_GRACE);
-function livePresence(uid) {
+function presenceOf(uid) {
+  if (pg.enabled()) return pg.presenceGet(uid);
+  return presence.get(uid) || null;
+}
+function setPresence(uid, row) {
+  if (pg.enabled()) { pg.presenceUpsert(uid, row); return; }
+  presence.set(uid, row);
+}
+function dropPresence(uid) {
+  if (pg.enabled()) { pg.presenceDelete(uid); return; }
+  presence.delete(uid);
+}
+function markPresenceHidden(uid) {
+  if (pg.enabled()) {
+    const p = pg.presenceGet(uid);
+    if (p && p.hiddenAt === undefined) pg.presencePatch(uid, { hiddenAt: Date.now() });
+    return;
+  }
   const p = presence.get(uid);
+  if (p && p.hiddenAt === undefined) p.hiddenAt = Date.now();
+}
+function livePresence(uid) {
+  const p = presenceOf(uid);
   if (!p) return null;
-  if (!presenceListed(p, Date.now())) { presence.delete(uid); return null; }
+  if (!presenceListed(p, Date.now())) { dropPresence(uid); return null; }
   const { hiddenAt: _away, ...live } = p;   // the mark is bookkeeping; the dashboard gets the row it always did
   return live;
 }
-setInterval(() => { const now = Date.now(); for (const [k, v] of presence) if (!presenceListed(v, now)) presence.delete(k); }, 30000).unref();
+every(() => {
+  if (pg.enabled()) return; // the cron tick drops expired rows; a read already does
+  const now = Date.now();
+  for (const [k, v] of presence) if (!presenceListed(v, now)) presence.delete(k);
+}, 30000);
 
 /* ---------- audit log ---------- */
 // Who signed in, who tried and failed, and what an admin changed. One JSON object per line in
@@ -847,6 +1057,10 @@ function clientIp(req) {
 }
 
 function auditLines() {
+  if (pg.enabled()) {
+    try { return pg.auditList().filter(r => r && r.id && r.ev); }
+    catch (e) { console.error('audit read failed', e.message); return []; }
+  }
   let text;
   try { text = fs.readFileSync(auditFile, 'utf8'); } catch { return []; }
   const rows = [];
@@ -864,6 +1078,14 @@ function auditKeep(rows) {
   return out;
 }
 function compactAudit() {
+  if (pg.enabled()) {
+    try {
+      const r = pg.auditCompact({ max: AUDIT_MAX, days: AUDIT_DAYS, now: Date.now() });
+      auditSeq = Math.max(auditSeq, r.maxId || 0);
+      auditCount = r.count || 0;
+    } catch (e) { console.error('audit compact failed', e.message); }
+    return;
+  }
   const rows = auditLines();
   for (const r of rows) if (+r.id > auditSeq) auditSeq = +r.id;
   const keep = auditKeep(rows);
@@ -876,7 +1098,8 @@ function compactAudit() {
 // Never throws: a log that can't be written must not break signing in.
 function audit(req, ev, f = {}) {
   if (!AUDIT_ON) return;
-  const rec = { id: ++auditSeq, ts: Date.now(), ev, ok: f.ok !== false };
+  const rec = { ts: Date.now(), ev, ok: f.ok !== false };
+  if (!pg.enabled()) rec.id = ++auditSeq;
   if (f.user) { rec.uid = f.user.id; rec.name = String(f.user.name || '').slice(0, 40); }
   else {
     if (f.uid) rec.uid = f.uid;
@@ -888,14 +1111,26 @@ function audit(req, ev, f = {}) {
   if (f.act) rec.act = String(f.act).slice(0, 40);
   const ip = clientIp(req);
   if (ip) rec.ip = ip;
-  try { fs.appendFileSync(auditFile, JSON.stringify(rec) + '\n'); }
-  catch (e) { return console.error('audit write failed', e.message); }
+  if (pg.enabled()) {
+    try {
+      const stored = pg.auditAppend(rec);
+      auditSeq = stored.id;
+      auditCount++;
+    } catch (e) { return console.error('audit write failed', e.message); }
+  } else {
+    try { fs.appendFileSync(auditFile, JSON.stringify(rec) + '\n'); }
+    catch (e) { return console.error('audit write failed', e.message); }
+  }
   // Amortized: a 5000-event cap rewrites the file once per ~1250 events.
-  if (AUDIT_MAX && ++auditCount > AUDIT_MAX * 1.25) compactAudit();
+  if (AUDIT_MAX && auditCount > AUDIT_MAX * 1.25) compactAudit();
+  else if (!pg.enabled()) auditCount++;
 }
 if (AUDIT_ON) {
+  if (pg.enabled()) {
+    try { const r = pg.auditMaxId(); auditSeq = r.maxId || 0; auditCount = r.count || 0; } catch { /* first boot, tables just created */ }
+  }
   compactAudit();                                // prune on boot, seed auditSeq/auditCount
-  setInterval(compactAudit, 3600000).unref();    // honour AUDIT_DAYS on an idle instance too
+  every(compactAudit, 3600000);                  // honour AUDIT_DAYS on an idle instance too
 }
 
 /* ---------- sign-in throttle ---------- */
@@ -943,7 +1178,7 @@ const ACCOUNT_FAILS = createBackoff({
   // At most one per profile with a password, so this cannot grow without bound.
   keep: k => k.startsWith('acct:') && hasPassword(db.users.find(u => u.id === k.slice(5)))
 });
-setInterval(() => { AUTH_BURST.sweep(); ADDR_FAILS.sweep(); ACCOUNT_FAILS.sweep(); }, 60000).unref();
+every(() => { AUTH_BURST.sweep(); ADDR_FAILS.sweep(); ACCOUNT_FAILS.sweep(); }, 60000);
 
 // Route -> the kind of failure it can count. Every route listed here also spends the burst
 // budget; `null` spends only that.
@@ -1009,7 +1244,7 @@ function strikeAddress(req, kind) {
 // dropped is a row that says the same thing as the ten before it.
 const FAIL_AUDIT = createWindow({ max: 10, windowMs: 60000 });
 const FAIL_AUDIT_ALL = createWindow({ max: 120, windowMs: 60000 });
-setInterval(() => { FAIL_AUDIT.sweep(); FAIL_AUDIT_ALL.sweep(); }, 60000).unref();
+every(() => { FAIL_AUDIT.sweep(); FAIL_AUDIT_ALL.sweep(); }, 60000);
 function auditFail(req, ev, f) {
   if (FAIL_AUDIT.take(ev + '|' + limitAddress(req)) || FAIL_AUDIT_ALL.take(ev)) return;
   audit(req, ev, f);
@@ -1111,7 +1346,7 @@ function setPassword(user, h) {
   user.pw = { h, set: new Date().toISOString() };
   delete user.pwReset;
   user.sv = sessionVersion(user) + 1;
-  for (const [k, v] of pairings) if (v.uid === user.id) pairings.delete(k);
+  dropPairings(user.id);
   dropDeviceLinks(db, user.id);
 }
 
@@ -1460,9 +1695,9 @@ const passwordRoutes = {
     delete u.pw;
     u.pwReset = { h: hashResetCode(code), exp: Date.now() + RESET_TTL_MS, by: admin.id };
     u.sv = sessionVersion(u) + 1;
-    for (const [k, v] of pairings) if (v.uid === u.id) pairings.delete(k);
+    dropPairings(u.id);
     dropDeviceLinks(db, u.id);
-    presence.delete(u.id);
+    dropPresence(u.id);
     saveDb();
     audit(req, 'admin.password.reset', { user: admin, target: u });
     json(res, 200, { ok: true, name: u.name, code, expires: u.pwReset.exp });
@@ -1758,7 +1993,13 @@ const passkeyRoutes = {
 // either way: an admin deleting a profile must still remove files uploaded while it was on.
 const MEDIA_LIMITS = mediaLimits(process.env);
 const MEDIA_ON = MEDIA_LIMITS.enabled;
-const MEDIA = createMediaStore({ dir: path.join(DATA, 'uploads'), limits: MEDIA_LIMITS, readState });
+const MEDIA = pg.enabled()
+  ? createPgMediaStore({ limits: MEDIA_LIMITS, readState })
+  : createMediaStore({ dir: path.join(DATA, 'uploads'), limits: MEDIA_LIMITS, readState });
+function mediaTransport() {
+  if (!pg.enabled()) return 'direct';
+  return pg.storageEnabled() ? 'signed' : 'chunk';
+}
 // Leftovers of uploads the previous process was receiving when it stopped.
 try { MEDIA.cleanTmp(); } catch (e) { console.error('media: boot cleanup failed', e.message); }
 // Per profile, not per address: every upload is signed in, and behind a proxy one address can be
@@ -1770,10 +2011,10 @@ const MEDIA_SWEEPS = createWindow({ max: 10, windowMs: 3600000 });
 // Uid -> until when its throttle has already been recorded, so a client hammering a closed
 // window writes one audit line per window, not one per request.
 const mediaThrottleNoted = new Map();
-setInterval(() => {
+every(() => {
   MEDIA_BURST.sweep(); MEDIA_SWEEPS.sweep();
   for (const [k, until] of mediaThrottleNoted) if (until < Date.now()) mediaThrottleNoted.delete(k);
-}, 600000).unref();
+}, 600000);
 function mediaThrottle(req, user, win) {
   const wait = win.take(user.id);
   if (!wait) return;
@@ -1793,7 +2034,7 @@ function mediaSweepAll() {
     if (r.removed || r.tmp) console.log(`media: swept ${r.removed} unreferenced file(s), ${(r.freedBytes / 1048576).toFixed(1)} MB, ${r.tmp} stale upload(s)`);
   } catch (e) { console.error('media: sweep failed', e); }
 }
-if (MEDIA_ON) {
+if (MEDIA_ON && LIVE) {
   setInterval(mediaSweepAll, 3600000).unref();
   setTimeout(mediaSweepAll, 5 * 60000).unref();
 }
@@ -1805,6 +2046,9 @@ if (MEDIA_ON) {
 // keeps a copy out of the HTTP cache — the app's own media store is the only client cache, and
 // an HTTP-cache copy would outlive the sign-out purge. No Range and no ETag: nothing asks.
 async function sendMediaFile(res, f, hash) {
+  // Larger than a function may return: a signed download URL, or a note to pull it in ranges.
+  if (f.redirect) return json(res, 200, { url: f.redirect, mime: f.mime, size: f.size, ext: f.ext });
+  if (f.chunked) return json(res, 200, { chunked: true, mime: f.mime, size: f.size, part: f.part, ext: f.ext });
   let fd;
   try { fd = fs.openSync(f.path, 'r'); }
   catch { throw new MediaError(404, 'media-missing'); }   // swept between the lookup and here
@@ -1843,9 +2087,58 @@ const mediaRoutes = {
     if (!user) return json(res, 401, { error: 'not signed in' });
     // Only ever the caller's own folder: another profile's file is exactly as missing as one
     // that was never uploaded.
+    const q = new URL(req.url, 'http://x').searchParams;
+    if (q.has('offset') && typeof MEDIA.readRange === 'function') {
+      const offset = Math.max(0, Math.floor(+q.get('offset') || 0));
+      const len = Math.min(3 * 1024 * 1024, Math.max(1, Math.floor(+q.get('len') || 2 * 1024 * 1024)));
+      const part = MEDIA.readRange(user.id, req.mediaHash, offset, len);
+      if (!part) throw new MediaError(404, 'media-missing');
+      res.writeHead(200, {
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': String(part.buf.length),
+        'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff'
+      });
+      res.end(part.buf);
+      return;
+    }
     const f = MEDIA.file(user.id, req.mediaHash);
     if (!f) throw new MediaError(404, 'media-missing');
     await sendMediaFile(res, f, req.mediaHash);
+  },
+  'POST /api/media/sign': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    if (typeof MEDIA.sign !== 'function') return json(res, 404, { error: 'not found' });
+    mediaThrottle(req, user, MEDIA_BURST);
+    json(res, 200, MEDIA.sign(user.id, text(body.hash), text(body.mime).toLowerCase(), Number(body.size)));
+  },
+  'POST /api/media/complete': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    if (typeof MEDIA.completeSigned !== 'function') return json(res, 404, { error: 'not found' });
+    const r = await MEDIA.completeSigned(user.id, text(body.hash));
+    json(res, r.status, r.body);
+  },
+  'POST /api/media/part': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    if (typeof MEDIA.acceptPart !== 'function') return json(res, 404, { error: 'not found' });
+    mediaThrottle(req, user, MEDIA_BURST);
+    const data = typeof body.data === 'string' ? body.data : '';
+    if (data.length > 4 * 1024 * 1024) return json(res, 413, { error: 'body too large' });
+    json(res, 200, await MEDIA.acceptPart(user.id, text(body.hash), body.index | 0, body.total | 0, data));
+  },
+  'POST /api/media/finish': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    if (typeof MEDIA.finishParts !== 'function') return json(res, 404, { error: 'not found' });
+    const r = await MEDIA.finishParts(user.id, text(body.hash), text(body.mime).toLowerCase());
+    json(res, r.status, r.body);
   },
   // Which of these the server does not have, so a device uploads only those. Answered from the
   // in-memory list of the caller's own folder.
@@ -1889,6 +2182,13 @@ let dataProbe = { at: 0, ok: false };
 function dataWritable() {
   const now = Date.now();
   if (dataProbe.at && now - dataProbe.at < DATA_PROBE_MS) return dataProbe.ok;
+  if (pg.enabled()) {
+    let ok = false;
+    try { ok = !!pg.ping().ok; }
+    catch (e) { console.error('health: database', e.message); ok = false; }
+    dataProbe = { at: now, ok };
+    return ok;
+  }
   const probe = path.join(DATA, '.health-' + process.pid);
   let ok;
   try {
@@ -1904,6 +2204,109 @@ function dataWritable() {
   return ok;
 }
 
+const syncMem = new Map(); // uploadId -> { uid, total, gzip, parts, at }
+function memSyncPut({ uploadId, idx, total, uid, gzip, b64 }) {
+  let slot = syncMem.get(uploadId);
+  if (!slot || slot.uid !== uid) slot = { uid, total, gzip: !!gzip, parts: new Map(), at: Date.now() };
+  slot.total = total;
+  slot.gzip = !!gzip;
+  slot.at = Date.now();
+  slot.parts.set(idx, Buffer.from(b64, 'base64'));
+  syncMem.set(uploadId, slot);
+}
+function memSyncAssemble(uploadId, uid) {
+  const slot = syncMem.get(uploadId);
+  if (!slot || slot.uid !== uid) return null;
+  if (slot.parts.size !== slot.total) return { complete: false };
+  const chunks = [];
+  for (let i = 0; i < slot.total; i++) {
+    if (!slot.parts.has(i)) return { complete: false };
+    chunks.push(slot.parts.get(i));
+  }
+  return { complete: true, gzip: slot.gzip, buf: Buffer.concat(chunks) };
+}
+function sweepMem() {
+  const cut = Date.now() - 3600000;
+  for (const [k, v] of syncMem) if (v.at < cut) syncMem.delete(k);
+}
+// The write half of PUT /api/data, shared with the chunked commit. `cur` is the document
+// readStateStrict just returned.
+function finishStateWrite(res, user, body, cur) {
+  const curRev = cur?._rev || 0;
+  if ((body.baseRev != null && body.baseRev !== curRev) ||
+      (body.baseRev != null && typeof body.baseWid === 'string' && cur?._wid && body.baseWid !== cur._wid)) {
+    return json(res, 409, { error: 'conflict', rev: curRev, state: forClient(cur) });
+  }
+  delete body.state.active;
+  const storedReset = Number(cur?.resetAt) || 0;
+  if (storedReset > (Number(body.state.resetAt) || 0)) {
+    body.state.resetAt = cur.resetAt;
+    if (cur.resetIds && typeof cur.resetIds === 'object') body.state.resetIds = cur.resetIds;
+    else delete body.state.resetIds;
+  }
+  const report = {};
+  try { stampPut(cur, body.state, { overRead: body.baseRev != null && body.baseRev === curRev, stamped: body.stamped === true, report }); }
+  catch (e) { if (e instanceof RangeError) return json(res, 400, { error: 'invalid state' }); throw e; }
+  body.state._rev = curRev + 1;
+  if (report.changed) body.state._rev = curRev + 2;
+  body.state._wids = [...(Array.isArray(cur?._wids) ? cur._wids : []), ...(cur?._wid ? [cur._wid] : [])]
+    .filter(x => typeof x === 'string').slice(-WID_KEEP);
+  body.state._wid = crypto.randomBytes(8).toString('hex');
+  let text;
+  try { text = JSON.stringify(body.state); }
+  catch (e) { if (e instanceof RangeError) return json(res, 400, { error: 'invalid state' }); throw e; }
+  try { writeState(user.id, text); }
+  catch (e) {
+    if (e instanceof HttpError && e.status === 409) {
+      const cur2 = e.state && e.state !== UNREADABLE ? e.state : null;
+      return json(res, 409, { error: 'conflict', rev: cur2?._rev || 0, state: forClient(cur2) });
+    }
+    throw e;
+  }
+  stateCache.delete(user.id);
+  if (MEDIA_ON) {
+    try { MEDIA.noteState(user.id, body.state); } catch (e) { console.error('media noteState', e); }
+  }
+  json(res, 200, { ok: true, ts: body.state._ts || null, rev: curRev + 1, wid: body.state._wid });
+}
+function cronOk(req) {
+  const secret = process.env.CRON_SECRET || '';
+  if (!secret) return false;
+  const header = String(req.headers.authorization || '');
+  const bearer = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+  let q = '';
+  try { q = new URL(req.url, 'http://x').searchParams.get('secret') || ''; } catch { q = ''; }
+  const got = bearer || q;
+  const a = Buffer.from(got);
+  const b = Buffer.from(secret);
+  if (a.length !== b.length || a.length === 0) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+async function runCron({ coach = false } = {}) {
+  let reminders = true;
+  try { reminderPass(); } catch (e) { reminders = false; console.error('cron reminders', e); }
+  let rests = 0;
+  try { rests = await fireDueRests(); } catch (e) { console.error('cron rests', e); }
+  sweepMem();
+  if (pg.enabled()) { try { pg.sweepEphemeral(Date.now()); } catch (e) { console.error('cron sweep', e.message); } }
+  else {
+    const now = Date.now();
+    for (const [k, v] of challenges) if (v.exp < now) challenges.delete(k);
+    for (const [k, v] of pairings) if (v.exp < now) pairings.delete(k);
+    for (const [k, v] of presence) if (!presenceListed(v, now)) presence.delete(k);
+  }
+  if (AUDIT_ON) { try { compactAudit(); } catch (e) { console.error('cron audit', e.message); } }
+  if (MEDIA_ON) { try { mediaSweepAll(); } catch (e) { console.error('cron media', e); } }
+  if (coach) {
+    try {
+      const { runCadence } = await import('./coach/cadence.js');
+      runCadence({ users: () => db.users, userNow });
+      if (process.env.VERCEL) await coachJobs.idle();
+    } catch (e) { console.error('cron coach', e); }
+  }
+  return { ok: true, rests, reminders };
+}
+
 const routes = {
   // 503 rather than a flag in a 200: the container healthcheck is `wget --spider`, which reads
   // the status and nothing else, and an instance that cannot write its data directory is exactly
@@ -1911,6 +2314,18 @@ const routes = {
   'GET /api/health': async (req, res) => {
     if (!dataWritable()) return json(res, 503, { ok: false, writable: false });
     json(res, 200, { ok: true, users: db.users.length, writable: true });
+  },
+
+  // Minutely work for a platform that cannot keep a timer. cron-job.org (or anything else)
+  // calls this with Authorization: Bearer CRON_SECRET, or ?secret=. The daily Vercel cron
+  // hits /api/cron/daily, which also runs the Coach cadence.
+  'GET /api/cron/tick': async (req, res) => {
+    if (!cronOk(req)) return json(res, 401, { error: 'unauthorized' });
+    json(res, 200, await runCron({ coach: false }));
+  },
+  'GET /api/cron/daily': async (req, res) => {
+    if (!cronOk(req)) return json(res, 401, { error: 'unauthorized' });
+    json(res, 200, await runCron({ coach: true }));
   },
 
   // Public config the login screen needs before anyone is signed in. `coach` is absent unless
@@ -1940,7 +2355,7 @@ const routes = {
       ...(DEFAULT_LANG ? { default_lang: DEFAULT_LANG } : {}),
       // Public like the two flags above: the caps are not a secret, and the absence of the
       // block is how the app knows this server does not take photos and videos at all.
-      ...(MEDIA_ON ? { media: mediaConfig(MEDIA_LIMITS) } : {}),
+      ...(MEDIA_ON ? { media: { ...mediaConfig(MEDIA_LIMITS), transport: mediaTransport() } } : {}),
       ...(readSession(req) ? { coach: coachConfig.publicConfig() } : {})
     });
   },
@@ -2118,7 +2533,7 @@ const routes = {
     user.sv = sessionVersion(user) + 1;
     // An unredeemed pairing code is a session-in-waiting for this account; it goes too, and so
     // does an unused device link.
-    for (const [k, v] of pairings) if (v.uid === user.id) pairings.delete(k);
+    dropPairings(user.id);
     dropDeviceLinks(db, user.id);
     saveDb();
     audit(req, 'auth.logout.all', { user });
@@ -2132,9 +2547,7 @@ const routes = {
     if (!user) return json(res, 401, { error: 'not signed in' });
     // One live code per profile: the newest is the one on screen. Keeping every code minted
     // let one session grow this Map without limit for five minutes at a time.
-    for (const [k, v] of pairings) if (v.uid === user.id) pairings.delete(k);
-    const code = makePairCode();
-    pairings.set(code, { uid: user.id, exp: Date.now() + 5 * 60000 });
+    const code = mintPairing(user.id);
     audit(req, 'auth.pair.create', { user });
     json(res, 200, { code });
   },
@@ -2144,8 +2557,7 @@ const routes = {
   'POST /api/pair/redeem': async (req, res) => {
     const body = await readBody(req);
     const code = text(body.code).trim().toUpperCase();
-    const p = pairings.get(code);
-    if (p) pairings.delete(code);
+    const p = takePairing(code);
     if (!p || p.exp < Date.now()) {
       auditFail(req, 'auth.pair.fail', { ok: false, msg: 'code-invalid' });
       return json(res, 400, { error: 'invalid or expired code', code: 'pair-invalid' });
@@ -2229,65 +2641,61 @@ const routes = {
     // compare-and-write is atomic for this process.
     const cur = readStateStrict(user.id);
     if (cur === UNREADABLE) { console.error('state file unreadable for', user.id); return json(res, 503, { error: 'state unreadable' }); }
-    const curRev = cur?._rev || 0;
-    // `_rev` is a counter, so after the data directory went back in time (a restored backup, a
-    // write lost to a power cut) the same number names a different document. Every write also gets
-    // a write id (`_wid`) and keeps its ancestors' (`_wids`): a client quoting the id it last saw
-    // (`baseWid`) is refused when the stored document is not that one, whatever the numbers say,
-    // and a client reading a document can tell whether it descends from its own (useStore pullState).
-    if ((body.baseRev != null && body.baseRev !== curRev) ||
-        (body.baseRev != null && typeof body.baseWid === 'string' && cur?._wid && body.baseWid !== cur._wid)) {
-      return json(res, 409, { error: 'conflict', rev: curRev, state: forClient(cur) });
+    return finishStateWrite(res, user, body, cur);
+  },
+
+  // A profile that does not fit in one 4.5 MB function body. Parts are ~2 MB of raw bytes,
+  // base64, so each POST stays under the platform limit. File mode keeps them in memory
+  // (Docker has no body limit this low, but the same client speaks both). Postgres keeps them
+  // in sync_parts so two instances can assemble one upload.
+  'POST /api/data/part': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    const uploadId = text(body.uploadId).slice(0, 80);
+    const idx = body.index;
+    const total = body.total;
+    const b64 = typeof body.data === 'string' ? body.data : '';
+    if (!uploadId || !Number.isInteger(idx) || !Number.isInteger(total) || idx < 0 || total < 1 || idx >= total || total > 64) {
+      return json(res, 400, { error: 'invalid upload' });
     }
-    delete body.state.active;              // in-progress workouts stay device-local
-    // "Reset everything" stamps the profile (`resetAt`, with `resetIds`: what it wiped). The stamp
-    // only moves forward: a write without it, or with an older one — a client from before it, a
-    // backup restored over the profile — keeps the stored stamp. Otherwise every device that saw
-    // the reset would take that copy for one older than the reset, and wipe it again on its next
-    // merge (frontend/src/lib/sync-merge.js).
-    const storedReset = Number(cur?.resetAt) || 0;
-    if (storedReset > (Number(body.state.resetAt) || 0)) {
-      body.state.resetAt = cur.resetAt;
-      if (cur.resetIds && typeof cur.resetIds === 'object') body.state.resetIds = cur.resetIds;
-      else delete body.state.resetIds;
+    if (b64.length > 4 * 1024 * 1024) return json(res, 413, { error: 'body too large' });
+    if (pg.enabled()) pg.syncPut({ uploadId, idx, total, uid: user.id, gzip: !!body.gzip, b64 });
+    else memSyncPut({ uploadId, idx, total, uid: user.id, gzip: !!body.gzip, b64 });
+    json(res, 200, { ok: true, index: idx, total });
+  },
+  'POST /api/data/commit': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const meta = await readBody(req);
+    const uploadId = text(meta.uploadId).slice(0, 80);
+    if (!uploadId) return json(res, 400, { error: 'upload required' });
+    let buf, gzip = false;
+    if (pg.enabled()) {
+      const assembled = pg.syncAssemble(uploadId, user.id);
+      if (!assembled?.complete) return json(res, 400, { error: 'incomplete upload' });
+      gzip = !!assembled.gzip;
+      buf = fs.readFileSync(assembled.file);
+      try { fs.unlinkSync(assembled.file); } catch { /* gone */ }
+      try { pg.syncDel(uploadId); } catch { /* gone */ }
+    } else {
+      const assembled = memSyncAssemble(uploadId, user.id);
+      if (!assembled?.complete) return json(res, 400, { error: 'incomplete upload' });
+      gzip = !!assembled.gzip;
+      buf = assembled.buf;
+      syncMem.delete(uploadId);
     }
-    // The records of removals and edits only grow, and what a writer that does not stamp its own
-    // changes (an older app, an API script) changed is stamped here, so it is neither wiped nor
-    // undone by the next device that merges (sync-stamps.js).
-    // A document nested too deep to compare is the bad request the stringify below refuses too.
-    const report = {};
-    try { stampPut(cur, body.state, { overRead: body.baseRev != null && body.baseRev === curRev, stamped: body.stamped === true, report }); }
-    catch (e) { if (e instanceof RangeError) return json(res, 400, { error: 'invalid state' }); throw e; }
-    body.state._rev = curRev + 1;          // server-owned; whatever the client sent is ignored
-    // A writer that does not stamp (an older app) takes the revision it is told for the document it
-    // sent, and only reads the profile again once the revision moves. When the server put back
-    // something it left out or set back (sync-stamps.js), the document stored is not that one: it
-    // goes in one revision further, so the writer's next check of the revision (every half minute)
-    // finds it moved and reads it, and its next push over the one it was told is a conflict to merge.
-    if (report.changed) body.state._rev = curRev + 2;
-    body.state._wids = [...(Array.isArray(cur?._wids) ? cur._wids : []), ...(cur?._wid ? [cur._wid] : [])]
-      .filter(x => typeof x === 'string').slice(-WID_KEEP);
-    body.state._wid = crypto.randomBytes(8).toString('hex');
-    // JSON.parse takes any nesting, JSON.stringify recurses and runs out of stack on a document
-    // nested some thousands deep. No client builds one; it is a bad request, not a server error.
-    let text;
-    try { text = JSON.stringify(body.state); }
-    catch (e) { if (e instanceof RangeError) return json(res, 400, { error: 'invalid state' }); throw e; }
-    atomicWrite(stateFile(user.id), text);
-    // The stat cache cannot see this write on its own: mtime granularity is 4 ms here (ext4 on
-    // this kernel — 3901 of 3999 back-to-back same-size writes shared one timestamp), and a
-    // `_rev` going from 7 to 8 does not change the file's size, so two writes inside one 4 ms
-    // tick are the same (mtimeMs, size) key. A reader that sampled between them would then serve
-    // the old revision until some later write happened to land on a different tick. This is the
-    // only writer of a state file in the tree, so evicting here is the whole fix.
-    stateCache.delete(user.id);
-    // Starts (or stops) the grace clock of every stored file this write stopped (or started)
-    // referencing. Bookkeeping only: the state is already saved, so nothing here may turn a
-    // successful write into an error.
-    if (MEDIA_ON) {
-      try { MEDIA.noteState(user.id, body.state); } catch (e) { console.error('media noteState', e); }
+    if (gzip) {
+      try { buf = zlib.gunzipSync(buf, { maxOutputLength: 32 * 1024 * 1024 }); }
+      catch { return json(res, 400, { error: 'invalid json' }); }
     }
-    json(res, 200, { ok: true, ts: body.state._ts || null, rev: curRev + 1, wid: body.state._wid });
+    let body;
+    try { body = JSON.parse(buf.toString('utf8')); }
+    catch { return json(res, 400, { error: 'invalid json' }); }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return json(res, 400, { error: 'invalid json' });
+    const cur = readStateStrict(user.id);
+    if (cur === UNREADABLE) { console.error('state file unreadable for', user.id); return json(res, 503, { error: 'state unreadable' }); }
+    return finishStateWrite(res, user, body, cur);
   },
 
   'GET /api/push/public-key': async (req, res) => json(res, 200, { key: vapid.publicKey }),
@@ -2388,7 +2796,7 @@ const routes = {
     const body = await readBody(req);
     if (body.active) {
       // a fresh row, which also clears any hidden mark
-      presence.set(user.id, {
+      setPresence(user.id, {
         name: text(body.name).slice(0, 60),
         exIdx: +body.exIdx || 0, exTotal: +body.exTotal || 0,
         setsDone: +body.setsDone || 0, setsTotal: +body.setsTotal || 0,
@@ -2397,9 +2805,8 @@ const routes = {
       });
     } else if (body.reason === 'hidden') {
       // The first mark stands: a repeat without a heartbeat between cannot stretch the grace.
-      const p = presence.get(user.id);
-      if (p && p.hiddenAt === undefined) p.hiddenAt = Date.now();
-    } else presence.delete(user.id);
+      markPresenceHidden(user.id);
+    } else dropPresence(user.id);
     json(res, 200, { ok: true });
   },
 
@@ -2458,7 +2865,7 @@ const routes = {
     if (!u) return json(res, 404, { error: 'no such user' });
     if (isAdmin(u)) return json(res, 400, { error: 'cannot disable an admin' });
     u.disabled = !!body.disabled;
-    if (u.disabled) presence.delete(u.id);   // drop them off "training now" at once
+    if (u.disabled) dropPresence(u.id);   // drop them off "training now" at once
     // A device link made before the lock would otherwise still be waiting when it is lifted.
     if (u.disabled) dropDeviceLinks(db, u.id);
     saveDb();
@@ -2484,9 +2891,10 @@ const routes = {
     db.creds = (db.creds || []).filter(c => c.userId !== u.id);
     db.subs = (db.subs || []).filter(x => x.userId !== u.id);
     dropDeviceLinks(db, u.id);
-    presence.delete(u.id);
+    dropPresence(u.id);
+    dropPairings(u.id);
     // The training history and any Coach credential of theirs, both outside db.json.
-    try { fs.unlinkSync(stateFile(u.id)); } catch { /* already gone */ }
+    unlinkState(u.id);
     try { coachConfig.clearProfileAuth(u.id); } catch { /* nothing stored */ }
     // Their photos and videos — the one place a profile's folder under uploads/ is removed.
     try { MEDIA.removeUser(u.id); } catch (e) { console.error('media: could not remove uploads of', u.id, e.message); }
@@ -2563,7 +2971,8 @@ const routes = {
   // ./data/audit.log already is the export, in a format jq reads directly.
   'POST /api/admin/audit/clear': async (req, res) => {
     const admin = requireAdmin(req, res); if (!admin) return;
-    try { fs.unlinkSync(auditFile); } catch { /* nothing logged yet */ }
+    if (pg.enabled()) { try { pg.auditClear(); } catch { /* nothing logged yet */ } }
+    else { try { fs.unlinkSync(auditFile); } catch { /* nothing logged yet */ } }
     auditCount = 0;
     audit(req, 'admin.audit.clear', { user: admin });
     json(res, 200, { ok: true });
@@ -2584,7 +2993,6 @@ const routes = {
 /* ---------- Coach: boot recovery, notifications, scheduled reviews ---------- */
 // A job that was running when the process died is not coming back; say so rather than leaving
 // a spinner that never resolves.
-coachJobs.recoverOnBoot();
 // A ready proposal is the one Coach event worth a notification. Failures and "nothing to
 // change" stay silent on purpose (FR-38/E4).
 coachJobs.setProposalHook((uid, pending) => {
@@ -2596,8 +3004,13 @@ coachJobs.setProposalHook((uid, pending) => {
     tag: 'coach-proposal', url: '#/coach'
   });
 });
-startCadence({ users: () => db.users, userNow });
-startWarmup();
+// Vercel has no process to recover and no interval to keep. A job killed mid-call is marked
+// failed the next time its status is read; the daily cron runs the cadence.
+if (LIVE) {
+  coachJobs.recoverOnBoot();
+  startCadence({ users: () => db.users, userNow });
+  startWarmup();
+}
 
 // node's requestTimeout is one number for every route, and it is half an hour (below) for the
 // sake of one: a video uploaded over a slow uplink. Every other request keeps node's old five
@@ -2623,7 +3036,15 @@ function bodyDeadline(req) {
 // The Capacitor WebView origins of the Android and iOS app.
 const APP_ORIGINS = new Set(['https://localhost', 'capacitor://localhost', 'http://localhost']);
 
-const server = http.createServer(async (req, res) => {
+export async function handleRequest(req, res) {
+  if (pg.enabled()) {
+    try { reloadDb(); coachConfig.reset(); }
+    catch (e) {
+      console.error('reload', e);
+      if (!res.headersSent) json(res, 503, { error: 'please retry' });
+      return;
+    }
+  }
   bodyDeadline(req);
   // Same-origin (the deployed nginx-proxied web app) never triggers CORS, so this only matters
   // for the paired mobile app calling in from its own WebView origin. It carries no cookie
@@ -2695,7 +3116,8 @@ const server = http.createServer(async (req, res) => {
     console.error(key, e);
     if (!res.headersSent) json(res, 500, { error: 'server error' });
   }
-});
+}
+const server = http.createServer((req, res) => { handleRequest(req, res); });
 // Node's default of 300 s for a whole request would answer 408 to a 40 MB video on a ~1 Mbit/s
 // uplink. Half an hour covers that; a stalled upload is cut much sooner by its own 60 s idle
 // timer in media.js, a client that never finishes its headers still meets headersTimeout, and
@@ -2706,4 +3128,9 @@ server.headersTimeout = 60000;
 // port that was actually bound: with PORT=0 the OS picks one, and a caller that did not choose it
 // (the tests spawn the server that way, and so does anyone running two instances on one box) has
 // no other way to learn it.
-server.listen(PORT, () => console.log(`gym-api on :${server.address().port} (rpID=${RP_ID}, origin=${ORIGIN})`));
+// Imported by the Vercel function (scripts/vercel/function-entry.js). Listening only when this
+// file is the program keeps `node server.js` — Docker and the tests — exactly as it was.
+const invokedDirectly = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
+if (invokedDirectly) {
+  server.listen(PORT, () => console.log(`gym-api on :${server.address().port} (rpID=${RP_ID}, origin=${ORIGIN})`));
+}

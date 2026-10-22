@@ -43,6 +43,41 @@ const RECENT_WORKOUT_POSTERS = 20
 const REJECTED = new Set(['media-too-large', 'media-type', 'media-invalid', 'media-too-long', 'proxy-too-large', 'hash-mismatch'])
 const PERSISTED_KEY = 'gym_state_v1'
 
+function b64(bytes) {
+  let out = ''
+  const step = 0x8000
+  for (let i = 0; i < bytes.length; i += step) {
+    out += String.fromCharCode(...bytes.subarray(i, Math.min(i + step, bytes.length)))
+  }
+  return btoa(out)
+}
+// Files over ~3.5 MB never go through the function body. `signed` PUTs straight at
+// Storage; `chunk` posts base64 parts the API assembles.
+async function uploadLarge(d, hash, rec) {
+  const sign = await d.api('/api/media/sign', { method: 'POST', body: JSON.stringify({ hash, mime: rec.mime, size: rec.size }) })
+  if (sign.mode === 'signed' && sign.url) {
+    try {
+      const headers = { 'Content-Type': rec.mime, 'x-upsert': 'true' }
+      if (sign.token) headers.Authorization = 'Bearer ' + sign.token
+      const put = await fetch(sign.url, { method: 'PUT', headers, body: rec.blob })
+      if (!put.ok) throw Object.assign(new Error('HTTP ' + put.status), { status: put.status, code: 'http' })
+      return d.api('/api/media/complete', { method: 'POST', body: JSON.stringify({ hash }) })
+    } catch {
+      // Storage CORS refused the browser, or the signed URL was rejected.
+      // The part route stores the same bytes through the API.
+    }
+  }
+  const partBytes = sign.partBytes || 2 * 1024 * 1024
+  const buf = new Uint8Array(await rec.blob.arrayBuffer())
+  const total = Math.max(1, Math.ceil(buf.length / partBytes))
+  for (let i = 0; i < total; i++) {
+    await d.api('/api/media/part', {
+      method: 'POST',
+      body: JSON.stringify({ hash, index: i, total, data: b64(buf.subarray(i * partBytes, (i + 1) * partBytes)) })
+    })
+  }
+  return d.api('/api/media/finish', { method: 'POST', body: JSON.stringify({ hash, mime: rec.mime }) })
+}
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const isNetwork = e => !e || e.status == null || e.code === 'timeout' || e.code === 'network'
 
@@ -157,7 +192,10 @@ export function createMediaSync(deps = {}) {
       if (!force && rec.size > BG_UPLOAD_METERED_MAX_MB * MB && !d.allowed()) { deferred++; continue }   // big files wait for Wi-Fi
       if (!force && active(upBackoff, h)) { skipped++; continue }
       try {
-        const res = await d.apiUpload('/api/media/' + h, rec.blob, rec.mime)
+        const transport = cfg?.media?.transport || 'direct'
+        const res = rec.size > 3.5 * MB && transport !== 'direct'
+          ? await uploadLarge(d, h, rec)
+          : await d.apiUpload('/api/media/' + h, rec.blob, rec.mime)
         await d.media.markSynced(h)
         upBackoff.delete(h)
         quotaTold = false

@@ -101,8 +101,10 @@ const hhmmToMin = v => {
 /**
  * @param {object} deps  { users(): [{id}], userNow(tz): {date,hhmm,weekday} }
  */
-export function startCadence(deps) {
-  const timer = setInterval(() => {
+export function runCadence(deps) {
+  if (!cfgStore.isEnabled() || !cfgStore.isConnected()) return 0;
+  let queued = 0;
+  const tickBody = () => {
     if (!cfgStore.isEnabled() || !cfgStore.isConnected()) return;
     for (const user of deps.users()) {
       try {
@@ -125,13 +127,21 @@ export function startCadence(deps) {
         const now = tz ? deps.userNow(tz) : null;
         if (!isDue(coach, S, now, reviewedAt, tz)) continue;
         jobs.enqueue(user.id, { kind: 'review', trigger: 'scheduled' });
+        queued++;
         console.log('coach: scheduled review queued for', user.id);
       } catch (e) {
         // Caps, an in-flight job, a provider that just went down: all ordinary, all silent.
         if (!(e instanceof jobs.CoachError)) console.error('coach cadence', user.id, e);
       }
     }
-  }, TICK_MS);
+  };
+  tickBody();
+  return queued;
+}
+
+export function startCadence(deps) {
+  if (process.env.VERCEL) return null;
+  const timer = setInterval(() => { runCadence(deps); }, TICK_MS);
   timer.unref();
   return timer;
 }

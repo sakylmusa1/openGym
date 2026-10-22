@@ -61,6 +61,9 @@ export async function warmOnce({ log = console, fetch: fetchImpl } = {}) {
 
 /** Boot + every half hour. Never throws; a failed warmup is only a missed optimisation. */
 export function startWarmup(log = console) {
+  // A local-model prefix cache. Hobby has no process to keep warm, and cloud APIs are
+  // never pinged from here anyway.
+  if (process.env.VERCEL) return null;
   const tick = () => warmOnce({ log }).catch(() => {});
   setTimeout(tick, 5000);                                 // let the container settle first
   const timer = setInterval(tick, INTERVAL_MS);

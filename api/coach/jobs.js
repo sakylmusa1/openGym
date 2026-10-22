@@ -27,6 +27,7 @@ import { handleFor } from './handle.js';
 import { fetchFor } from './node-fetch.js';
 import { canDropPrivileges, unprivilegedIds } from './adapters/spawn.js';
 import { cohortForPayload, invalidate as invalidateCohort } from './cohort.js';
+import * as pg from '../pg/store.js';
 
 // The prompt assembly, the plan fingerprint and the invoke→parse→validate→repair loop all
 // live in ./core now, where the phone can import them too. Re-exported so nothing that
@@ -38,7 +39,10 @@ const COACH_DIR = path.join(DATA, 'coach');
 
 // Five minutes by default. A local model on a small CPU box can legitimately need more; a
 // cloud API that needs more has a problem. COACH_JOB_TIMEOUT_MS overrides, never below one minute.
-export const TIMEOUT_MS = Math.max(60000, +process.env.COACH_JOB_TIMEOUT_MS || 5 * 60000);
+// A Vercel function dies at 300s, so a job there is capped at four minutes and awaited inside
+// the request that started it. It is not resumed: a timeout is a failed job the user retries.
+const configuredTimeout = Math.max(60000, +process.env.COACH_JOB_TIMEOUT_MS || 5 * 60000);
+export const TIMEOUT_MS = process.env.VERCEL ? Math.min(configuredTimeout, 240000) : configuredTimeout;
 const MAX_CONCURRENT = 2;          // these are minutes-scale jobs on often-single-core boxes
 const PENDING_DAYS = 14;           // FR-33
 const HISTORY_MAX = 20;
@@ -49,11 +53,18 @@ const safe = uid => String(uid).replace(/[^a-zA-Z0-9_-]/g, '');
 const userFile = uid => path.join(COACH_DIR, safe(uid) + '.json');
 const EMPTY = { daily: null, current: null, pending: null, history: [] };
 
+const userDoc = uid => 'coach-user:' + safe(uid);
 export function readUser(uid) {
+  if (pg.enabled()) {
+    const row = pg.docGet(userDoc(uid));
+    if (!row) return { ...EMPTY };
+    try { return { ...EMPTY, ...JSON.parse(row.body) }; } catch { return { ...EMPTY }; }
+  }
   try { return { ...EMPTY, ...JSON.parse(fs.readFileSync(userFile(uid), 'utf8')) }; }
   catch { return { ...EMPTY }; }
 }
 function writeUser(uid, rec) {
+  if (pg.enabled()) { pg.docPut(userDoc(uid), JSON.stringify(rec)); return; }
   fs.mkdirSync(COACH_DIR, { recursive: true, mode: 0o700 });
   const file = userFile(uid), tmp = file + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(rec), { mode: 0o600 });
@@ -73,7 +84,8 @@ function patchUser(uid, patch) {
  *  and either way finishes without writing anything back (see finish). */
 export function clearUser(uid) {
   const { daily } = readUser(uid);
-  try { fs.unlinkSync(userFile(uid)); } catch { /* nothing to clear */ }
+  if (pg.enabled()) { try { pg.docDel(userDoc(uid)); } catch { /* nothing to clear */ } }
+  else { try { fs.unlinkSync(userFile(uid)); } catch { /* nothing to clear */ } }
   if (daily?.date === todayISO()) writeUser(uid, { ...EMPTY, daily });
   const queued = queue.findIndex(j => j.uid === uid);
   if (queued >= 0) { queue.splice(queued, 1); inflight.delete(uid); }
@@ -84,6 +96,10 @@ export function clearUser(uid) {
 
 /** Every profile with a state file — the population a cohort is drawn from. */
 export function listUserIds() {
+  if (pg.enabled()) {
+    try { return pg.docList('state:').map(id => id.slice('state:'.length)).filter(Boolean); }
+    catch { return []; }
+  }
   try {
     return fs.readdirSync(DATA).filter(f => /^state-[a-zA-Z0-9_-]+\.json$/.test(f)).map(f => f.slice(6, -5));
   } catch { return []; }
@@ -101,6 +117,11 @@ export function setShare(uid, share) {
 }
 
 export function readState(uid) {
+  if (pg.enabled()) {
+    const row = pg.docGet('state:' + safe(uid));
+    if (!row) return null;
+    try { return JSON.parse(row.body); } catch { return null; }
+  }
   try { return JSON.parse(fs.readFileSync(path.join(DATA, 'state-' + safe(uid) + '.json'), 'utf8')); }
   catch { return null; }
 }
@@ -137,7 +158,17 @@ function instanceUsedToday() {
 
 /** What the client polls. Expiry is enforced lazily here rather than on a timer. */
 export function status(uid) {
-  const rec = readUser(uid);
+  let rec = readUser(uid);
+  // A function that was killed (the 300s ceiling, a cold start) cannot run recoverOnBoot
+  // without also failing a job another instance is still inside. A current job older than
+  // its own timeout is not coming back.
+  if ((process.env.VERCEL || pg.enabled()) && rec.current?.startedAt && Date.now() - rec.current.startedAt > TIMEOUT_MS + 15000) {
+    writeUser(uid, {
+      ...rec, current: null,
+      history: [...(rec.history || []), { id: rec.current.id, kind: rec.current.kind, outcome: 'failed', errorClass: 'restart', at: Date.now() }].slice(-HISTORY_MAX)
+    });
+    rec = readUser(uid);
+  }
   if (rec.pending && rec.pending.expiresAt && rec.pending.expiresAt < Date.now()) {
     archive(uid, rec, 'expired');
     // Same shape as every other answer: the poll that happens to be the one which expires a
@@ -254,6 +285,16 @@ export function enqueue(uid, opts) {
   queue.push(job);
   pump();
   return { id: job.id };
+}
+
+/** Resolves when nothing is queued or running. The Vercel route awaits this before it answers. */
+export function idle() {
+  if (!queue.length && running === 0) return Promise.resolve();
+  return new Promise(resolve => {
+    const timer = setInterval(() => {
+      if (!queue.length && running === 0) { clearInterval(timer); resolve(); }
+    }, 50);
+  });
 }
 
 function pump() {
@@ -495,6 +536,24 @@ export async function testRun() {
  * that may already have cost them a provider call.
  */
 export function recoverOnBoot() {
+  if (process.env.VERCEL) return 0;
+  if (pg.enabled()) {
+    let n = 0;
+    try {
+      for (const id of pg.docList('coach-user:')) {
+        const uid = id.slice('coach-user:'.length);
+        const rec = readUser(uid);
+        if (!rec.current) continue;
+        writeUser(uid, {
+          ...rec, current: null,
+          history: [...(rec.history || []), { id: rec.current.id, kind: rec.current.kind, outcome: 'failed', errorClass: 'restart', at: Date.now() }].slice(-HISTORY_MAX)
+        });
+        n++;
+      }
+    } catch { /* no documents yet */ }
+    if (n) console.log(`coach: cleared ${n} job(s) interrupted by restart`);
+    return n;
+  }
   let n = 0;
   try {
     for (const f of fs.readdirSync(COACH_DIR)) {
