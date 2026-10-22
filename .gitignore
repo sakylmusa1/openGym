@@ -9,6 +9,10 @@ data/
 # Local config
 .env
 
+# Vercel Build Output and the Supabase CLI's local scratch
+.vercel
+supabase/.temp
+
 # Build output / deps
 frontend/dist/
 node_modules/

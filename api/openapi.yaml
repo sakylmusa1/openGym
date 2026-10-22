@@ -171,10 +171,12 @@ paths:
       description: |
         Always public. Also reports how many user accounts exist.
 
-        The check writes: it creates and removes one empty file under `DATA_DIR`,
-        because a server whose data directory is full or read-only has every write
-        path broken while the port still answers. It is a 503 when that fails — the
-        container healthcheck (`wget --spider`) reads the status and nothing else.
+        With `DATABASE_URL` set the check runs `SELECT 1` (a serverless deploy has
+        no durable disk). Otherwise it creates and removes one empty file under
+        `DATA_DIR`, because a server whose data directory is full or read-only has
+        every write path broken while the port still answers. It is a 503 when that
+        fails — the container healthcheck (`wget --spider`) reads the status and
+        nothing else.
 
         The probe runs at most once every five seconds and the answer in between is
         the last one, so a poll can be that stale. The route is unauthenticated, and
@@ -1995,7 +1997,9 @@ paths:
         and the push goes to every subscription, as before. The client schedules this
         on rest start/extend and cancels on skip or on-screen completion. The push
         only actually fires when the tab was backgrounded/suspended and never got to
-        cancel it. Timers live in memory: an API restart drops them.
+        cancel it. File mode keeps the timer in memory, so an API restart drops it.
+        With `DATABASE_URL` the timer is a row: a long-lived process still fires it
+        on time, and `/api/cron/tick` sends any that are already due.
       requestBody:
         required: true
         content:
@@ -2952,6 +2956,245 @@ paths:
               example: { error: "unknown provider" }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/cron/tick:
+    get:
+      tags: [meta]
+      operationId: cronTick
+      summary: Minutely reminders, rest pushes and cleanups
+      description: |
+        Does the work a long-lived process used to do on a timer: workout reminders,
+        due rest-timer pushes, expired challenges and pairing codes, audit retention
+        and unreferenced media. Call it about once a minute from an external
+        scheduler. Requires `Authorization: Bearer <CRON_SECRET>` or `?secret=`.
+      security: []
+      parameters:
+        - in: query
+          name: secret
+          schema: { type: string }
+          required: false
+          description: Alternative to the Bearer header, for schedulers that cannot set headers.
+      responses:
+        '200':
+          description: The tick ran.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  rests: { type: integer }
+        '401':
+          description: Missing or wrong CRON_SECRET.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/cron/daily:
+    get:
+      tags: [meta]
+      operationId: cronDaily
+      summary: Daily cleanup and Coach cadence
+      description: |
+        Same work as `/api/cron/tick`, plus the Coach's scheduled reviews. Vercel
+        Hobby can run this once a day. Same `CRON_SECRET` check.
+      security: []
+      parameters:
+        - in: query
+          name: secret
+          schema: { type: string }
+          required: false
+      responses:
+        '200':
+          description: The daily pass ran.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        '401':
+          description: Missing or wrong CRON_SECRET.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/data/part:
+    post:
+      tags: [data]
+      operationId: putDataPart
+      summary: One part of a large state upload
+      description: |
+        Used when a profile does not fit in one request body (about 4.5 MB on
+        Vercel). `data` is base64 of one raw slice, about 2 MB before encoding.
+        `gzip` says the assembled bytes are gzip of the JSON `{ state, baseRev, ... }`
+        body that `PUT /api/data` would have taken.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uploadId, index, total, data]
+              properties:
+                uploadId: { type: string }
+                index: { type: integer }
+                total: { type: integer }
+                gzip: { type: boolean }
+                data: { type: string, description: Base64 of this slice. }
+      responses:
+        '200':
+          description: Part stored.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ok' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413':
+          description: This part is over the body limit.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/data/commit:
+    post:
+      tags: [data]
+      operationId: commitData
+      summary: Finish a large state upload
+      description: Assembles the parts from `POST /api/data/part` and writes them the same way as `PUT /api/data`, including the revision conflict.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uploadId]
+              properties:
+                uploadId: { type: string }
+      responses:
+        '200':
+          description: Stored. Same body as `PUT /api/data`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ok' }
+        '400':
+          description: The upload is incomplete or not JSON.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: Another device wrote first. Same shape as `PUT /api/data`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/media/sign:
+    post:
+      tags: [media]
+      operationId: signMedia
+      summary: Signed upload URL for a large file
+      description: |
+        For a file over the function body limit. With Supabase Storage configured the
+        answer is `{ mode: "signed", url, token }` and the browser PUTs the bytes
+        straight at `url` (header `x-upsert: true`, and `Authorization: Bearer <token>`
+        when a token is present), then calls `POST /api/media/complete`. Without
+        Storage the answer is `{ mode: "chunk", partBytes }` and the bytes go to
+        `POST /api/media/part`. Absent (404) on a file-backed server, which takes the
+        bytes on `PUT /api/media/{hash}`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hash, mime, size]
+              properties:
+                hash: { type: string }
+                mime: { type: string }
+                size: { type: integer }
+      responses:
+        '200':
+          description: Where to send the bytes.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mode: { type: string, enum: [signed, chunk] }
+                  url: { type: string }
+                  token: { type: string }
+                  partBytes: { type: integer }
+                  hash: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: This server takes the file on PUT /api/media/{hash}.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/media/complete:
+    post:
+      tags: [media]
+      operationId: completeMedia
+      summary: Check a file uploaded with a signed URL
+      description: Downloads the object, checks its hash and type, and stores the row. The Storage object stays where the signed upload put it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hash]
+              properties:
+                hash: { type: string }
+      responses:
+        '201':
+          description: Stored.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ok' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/media/part:
+    post:
+      tags: [media]
+      operationId: mediaPart
+      summary: One part of a large file, when Storage is not configured
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hash, index, total, data]
+              properties:
+                hash: { type: string }
+                index: { type: integer }
+                total: { type: integer }
+                data: { type: string, description: Base64 of this slice. }
+      responses:
+        '200':
+          description: Part stored.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ok' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/media/finish:
+    post:
+      tags: [media]
+      operationId: finishMedia
+      summary: Assemble chunked media parts and store the file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hash, mime]
+              properties:
+                hash: { type: string }
+                mime: { type: string }
+      responses:
+        '201':
+          description: Stored.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ok' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
 
 components:
   securitySchemes:

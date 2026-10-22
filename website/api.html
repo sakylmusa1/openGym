@@ -245,7 +245,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <p class="api-facts">
     <span>OpenAPI 3.1.0</span>
     <span>openGym v1.4.1</span>
-    <span>69 endpoints</span>
+    <span>77 endpoints</span>
     <span>AGPL-3.0-or-later</span>
   </p>
 
@@ -305,7 +305,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   </summary>
   <div class="ep-body">
 <p>Always public. Also reports how many user accounts exist.</p>
-<p>The check writes: it creates and removes one empty file under <code>DATA_DIR</code>, because a server whose data directory is full or read-only has every write path broken while the port still answers. It is a 503 when that fails — the container healthcheck (<code>wget --spider</code>) reads the status and nothing else.</p>
+<p>With <code>DATABASE_URL</code> set the check runs <code>SELECT 1</code> (a serverless deploy has no durable disk). Otherwise it creates and removes one empty file under <code>DATA_DIR</code>, because a server whose data directory is full or read-only has every write path broken while the port still answers. It is a 503 when that fails — the container healthcheck (<code>wget --spider</code>) reads the status and nothing else.</p>
 <p>The probe runs at most once every five seconds and the answer in between is the last one, so a poll can be that stale. The route is unauthenticated, and one disk write per request is not something to leave open to anyone.</p>
     <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
 
@@ -344,6 +344,70 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <div class="prow rrow">
     <span class="r-code s2">200</span>
     <span class="p-desc">Instance flags, plus the Coach block for a signed-in caller.<span class="r-sig">{ invite_only: boolean, allow_guest: boolean, coach: object | null, password_login: always true, default_lang: string, media: <a href="#schema-MediaConfig">MediaConfig</a> }</span></span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-cronTick">
+  <summary>
+    <span class="m get">GET</span>
+    <span class="ep-path"><code>/api/cron/tick</code><span class="ep-chip public">public</span></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Minutely reminders, rest pushes and cleanups</span>
+  </summary>
+  <div class="ep-body">
+<p>Does the work a long-lived process used to do on a timer: workout reminders, due rest-timer pushes, expired challenges and pairing codes, audit retention and unreferenced media. Call it about once a minute from an external scheduler. Requires <code>Authorization: Bearer &lt;CRON_SECRET&gt;</code> or <code>?secret=</code>.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
+<p class="ep-h">Query parameters</p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">secret</span>
+    <span class="p-type">string</span>
+    <span class="p-desc">Alternative to the Bearer header, for schedulers that cannot set headers.</span>
+  </div>
+</div>
+
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">The tick ran.<span class="r-sig">{ ok: boolean, rests: integer }</span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Missing or wrong CRON_SECRET.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-cronDaily">
+  <summary>
+    <span class="m get">GET</span>
+    <span class="ep-path"><code>/api/cron/daily</code><span class="ep-chip public">public</span></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Daily cleanup and Coach cadence</span>
+  </summary>
+  <div class="ep-body">
+<p>Same work as <code>/api/cron/tick</code>, plus the Coach's scheduled reviews. Vercel Hobby can run this once a day. Same <code>CRON_SECRET</code> check.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
+<p class="ep-h">Query parameters</p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">secret</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">The daily pass ran.<span class="r-sig">{ ok: boolean }</span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Missing or wrong CRON_SECRET.</span>
   </div>
     </div>
   </div>
@@ -1567,6 +1631,102 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
     </div>
   </div>
 </details>
+
+<details class="ep" id="op-putDataPart">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/data/part</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">One part of a large state upload</span>
+  </summary>
+  <div class="ep-body">
+<p>Used when a profile does not fit in one request body (about 4.5 MB on Vercel). <code>data</code> is base64 of one raw slice, about 2 MB before encoding. <code>gzip</code> says the assembled bytes are gzip of the JSON <code>{ state, baseRev, ... }</code> body that <code>PUT /api/data</code> would have taken.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">uploadId<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">index<em class="p-req" title="required">required</em></span>
+    <span class="p-type">integer</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">total<em class="p-req" title="required">required</em></span>
+    <span class="p-type">integer</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">gzip</span>
+    <span class="p-type">boolean</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">data<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc">Base64 of this slice.</span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Part stored.<span class="r-sig"><a href="#schema-Ok">Ok</a></span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">413</span>
+    <span class="p-desc">This part is over the body limit.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-commitData">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/data/commit</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Finish a large state upload</span>
+  </summary>
+  <div class="ep-body">
+<p>Assembles the parts from <code>POST /api/data/part</code> and writes them the same way as <code>PUT /api/data</code>, including the revision conflict.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">uploadId<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Stored. Same body as <code>PUT /api/data</code>.<span class="r-sig"><a href="#schema-Ok">Ok</a></span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">The upload is incomplete or not JSON.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">Another device wrote first. Same shape as <code>PUT /api/data</code>.</span>
+  </div>
+    </div>
+  </div>
+</details>
   </div>
 </section>
 
@@ -1736,7 +1896,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
     <span class="ep-sum">Schedule a server-side rest-timer push</span>
   </summary>
   <div class="ep-body">
-<p>Schedules one push after <code>seconds</code> (a number or numeric string ≥ 1, clamped to 3600). One pending timer per device, keyed by <code>deviceId</code>, the same token the subscription was registered with; a new call from the same device replaces it, and the push goes only to that device's subscriptions. Without a <code>deviceId</code> there is one timer per account and the push goes to every subscription, as before. The client schedules this on rest start/extend and cancels on skip or on-screen completion. The push only actually fires when the tab was backgrounded/suspended and never got to cancel it. Timers live in memory: an API restart drops them.</p>
+<p>Schedules one push after <code>seconds</code> (a number or numeric string ≥ 1, clamped to 3600). One pending timer per device, keyed by <code>deviceId</code>, the same token the subscription was registered with; a new call from the same device replaces it, and the push goes only to that device's subscriptions. Without a <code>deviceId</code> there is one timer per account and the push goes to every subscription, as before. The client schedules this on rest start/extend and cancels on skip or on-screen completion. The push only actually fires when the tab was backgrounded/suspended and never got to cancel it. File mode keeps the timer in memory, so an API restart drops it. With <code>DATABASE_URL</code> the timer is a row: a long-lived process still fires it on time, and <code>/api/cron/tick</code> sends any that are already due.</p>
     <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
 
 <p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
@@ -2058,6 +2218,168 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <div class="prow rrow">
     <span class="r-code s4">429</span>
     <span class="p-desc">More than 10 sweeps this hour (<code>locked</code>).<span class="r-sig"><code>{&quot;error&quot;:&quot;too many uploads, try again later&quot;}</code></span></span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-signMedia">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/media/sign</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Signed upload URL for a large file</span>
+  </summary>
+  <div class="ep-body">
+<p>For a file over the function body limit. With Supabase Storage configured the answer is <code>{ mode: &quot;signed&quot;, url, token }</code> and the browser PUTs the bytes straight at <code>url</code> (header <code>x-upsert: true</code>, and <code>Authorization: Bearer &lt;token&gt;</code> when a token is present), then calls <code>POST /api/media/complete</code>. Without Storage the answer is <code>{ mode: &quot;chunk&quot;, partBytes }</code> and the bytes go to <code>POST /api/media/part</code>. Absent (404) on a file-backed server, which takes the bytes on <code>PUT /api/media/{hash}</code>.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">hash<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">mime<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">size<em class="p-req" title="required">required</em></span>
+    <span class="p-type">integer</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Where to send the bytes.<span class="r-sig">{ mode: &quot;signed&quot; | &quot;chunk&quot;, url: string, token: string, partBytes: integer, hash: string }</span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">404</span>
+    <span class="p-desc">This server takes the file on PUT /api/media/{hash}.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-completeMedia">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/media/complete</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Check a file uploaded with a signed URL</span>
+  </summary>
+  <div class="ep-body">
+<p>Downloads the object, checks its hash and type, and stores the row. The Storage object stays where the signed upload put it.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">hash<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">201</span>
+    <span class="p-desc">Stored.<span class="r-sig"><a href="#schema-Ok">Ok</a></span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-mediaPart">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/media/part</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">One part of a large file, when Storage is not configured</span>
+  </summary>
+  <div class="ep-body">
+
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">hash<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">index<em class="p-req" title="required">required</em></span>
+    <span class="p-type">integer</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">total<em class="p-req" title="required">required</em></span>
+    <span class="p-type">integer</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">data<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc">Base64 of this slice.</span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Part stored.<span class="r-sig"><a href="#schema-Ok">Ok</a></span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-finishMedia">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/media/finish</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Assemble chunked media parts and store the file</span>
+  </summary>
+  <div class="ep-body">
+
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">hash<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">mime<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">201</span>
+    <span class="p-desc">Stored.<span class="r-sig"><a href="#schema-Ok">Ok</a></span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
   </div>
     </div>
   </div>

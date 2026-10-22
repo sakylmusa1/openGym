@@ -79,6 +79,7 @@ export function coachRoutes({ json, readBody, readSession, requireAdmin }) {
           lang: body.lang,
           refine: body.refine ? String(body.refine).slice(0, cfgStore.MAX_MESSAGE_LEN_CEILING) : null
         });
+        if (process.env.VERCEL) await jobs.idle();
         json(res, 202, { job });
       } catch (e) { failEnqueue(res, e); }
     },
@@ -92,6 +93,7 @@ export function coachRoutes({ json, readBody, readSession, requireAdmin }) {
           lang: body.lang,
           note: body.note ? String(body.note).slice(0, cfgStore.MAX_MESSAGE_LEN_CEILING) : null
         });
+        if (process.env.VERCEL) await jobs.idle();
         json(res, 202, { job });
       } catch (e) { failEnqueue(res, e); }
     },
@@ -102,6 +104,7 @@ export function coachRoutes({ json, readBody, readSession, requireAdmin }) {
       const body = await readBody(req);
       try {
         const job = jobs.enqueue(user.id, { kind: 'debrief', lang: body.lang, workoutId: body.workoutId ? String(body.workoutId).slice(0, 40) : null });
+        if (process.env.VERCEL) await jobs.idle();
         json(res, 202, { job });
       } catch (e) { failEnqueue(res, e); }
     },

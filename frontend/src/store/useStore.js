@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api, setRemoteAuth } from '../lib/api.js'
+import { pushState } from '../lib/sync-transport.js'
 import { localTZ } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import { registerCustom, healCustomEx } from '../lib/exercises.js'
@@ -721,7 +722,7 @@ export const useStore = create((set, get) => {
     if (asReplace != null) { body.baseRev = asReplace.rev; if (asReplace.wid) body.baseWid = asReplace.wid }
     else if (!force && base) { body.baseRev = base.rev; if (base.wid) body.baseWid = base.wid }
     try {
-      const r = await api('/api/data', { method: 'PUT', body: JSON.stringify(body) })
+      const r = await pushState(api, body)
       // A server from before revisions answers without one — then there is nothing to hold the
       // next push to, and the marker must not pretend otherwise.
       if (r.rev == null) dropSync()

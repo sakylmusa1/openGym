@@ -4,12 +4,14 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import * as pg from '../pg/store.js';
 
 const DATA = process.env.DATA_DIR || '/data';
 
 export const HANDLE_LENGTH = 16;
 
 export function handleFor(uid) {
-  const secret = fs.readFileSync(path.join(DATA, 'secret'), 'utf8').trim();
+  const fromEnv = (process.env.SESSION_SECRET || '').trim();
+  const secret = fromEnv || (pg.enabled() ? (pg.kvGet('secret') || '').trim() : '') || fs.readFileSync(path.join(DATA, 'secret'), 'utf8').trim();
   return crypto.createHmac('sha256', secret).update('coach-handle:' + uid).digest('base64url').slice(0, HANDLE_LENGTH);
 }

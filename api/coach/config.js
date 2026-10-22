@@ -28,6 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { HTTP_PROVIDERS, baseUrlFor } from './core/providers.js';
 import { MAX_OUTPUT_TOKENS } from './core/adapters/http.js';
+import * as pg from '../pg/store.js';
 
 const DATA = process.env.DATA_DIR || '/data';
 const FILE = path.join(DATA, 'coach.json');
@@ -111,11 +112,19 @@ const LOG_MAX = 100;
 /* ---------- at-rest encryption ---------- */
 
 let keyCache = null;
+function secretOf() {
+  const fromEnv = (process.env.SESSION_SECRET || '').trim();
+  if (fromEnv) return fromEnv;
+  if (pg.enabled()) {
+    const stored = (pg.kvGet('secret') || '').trim();
+    if (stored) return stored;
+  }
+  // Read the file lazily: server.js creates it at boot, and this module may be imported first.
+  return fs.readFileSync(path.join(DATA, 'secret'), 'utf8').trim();
+}
 function key() {
   if (keyCache) return keyCache;
-  // Read the secret lazily: server.js creates it at boot, and this module may be imported first.
-  const secret = fs.readFileSync(path.join(DATA, 'secret'), 'utf8').trim();
-  keyCache = Buffer.from(crypto.hkdfSync('sha256', Buffer.from(secret, 'utf8'), Buffer.alloc(0), Buffer.from('opengym-coach-v1'), 32));
+  keyCache = Buffer.from(crypto.hkdfSync('sha256', Buffer.from(secretOf(), 'utf8'), Buffer.alloc(0), Buffer.from('opengym-coach-v1'), 32));
   return keyCache;
 }
 export function encrypt(obj) {
@@ -144,7 +153,12 @@ function atomicWrite(file, content, mode) {
 export function load() {
   if (cache) return cache;
   let stored = {};
-  try { stored = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch { /* absent = feature off */ }
+  if (pg.enabled()) {
+    const row = pg.docGet('coach');
+    if (row) { try { stored = JSON.parse(row.body); } catch { /* absent = feature off */ } }
+  } else {
+    try { stored = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch { /* absent = feature off */ }
+  }
   cache = { ...DEFAULTS, ...stored, caps: { ...DEFAULTS.caps, ...(stored.caps || {}) } };
 
   // Until v1.2.11 this file held ONE credential, ONE model and ONE binding — for whichever
@@ -174,7 +188,9 @@ export function load() {
 export function save(patch) {
   const next = { ...load(), ...patch };
   cache = next;
-  atomicWrite(FILE, JSON.stringify(next, null, 2), 0o600);
+  const text = JSON.stringify(next, null, 2);
+  if (pg.enabled()) pg.docPut('coach', text);
+  else atomicWrite(FILE, text, 0o600);
   return next;
 }
 // Test seam: forget the in-memory copy so the next load() re-reads from disk.
@@ -216,13 +232,28 @@ export function profileAuthFile(uid) {
   return path.join(DATA, `coach-auth-${uid}.json`);
 }
 export function loadProfileAuth(uid) {
+  if (pg.enabled()) {
+    if (!uidSafe(uid)) return null;
+    const row = pg.docGet('coach-auth:' + uid);
+    if (!row) return null;
+    try { return JSON.parse(row.body); } catch { return null; }
+  }
   try { return JSON.parse(fs.readFileSync(profileAuthFile(uid), 'utf8')); } catch { return null; }
 }
 export function saveProfileAuth(uid, auth) {
+  if (pg.enabled()) {
+    if (!uidSafe(uid)) throw new Error('bad profile id');
+    pg.docPut('coach-auth:' + uid, JSON.stringify(auth, null, 2));
+    return auth;
+  }
   atomicWrite(profileAuthFile(uid), JSON.stringify(auth, null, 2), 0o600);
   return auth;
 }
 export function clearProfileAuth(uid) {
+  if (pg.enabled()) {
+    if (!uidSafe(uid)) return false;
+    try { pg.docDel('coach-auth:' + uid); return true; } catch { return false; }
+  }
   try { fs.unlinkSync(profileAuthFile(uid)); return true; } catch { return false; }
 }
 

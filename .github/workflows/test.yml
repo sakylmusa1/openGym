@@ -8,6 +8,10 @@ on:
       - 'frontend/**'
       - 'api/**'
       - 'mcp/**'
+      - 'vercel.json'
+      - 'supabase/**'
+      - 'scripts/vercel/**'
+      - 'DEPLOY-VERCEL.md'
       - 'scripts/build-coach-assets.mjs'
       - 'scripts/build-coach-library.mjs'
       - 'scripts/build-api-docs.mjs'
@@ -20,6 +24,10 @@ on:
       - 'frontend/**'
       - 'api/**'
       - 'mcp/**'
+      - 'vercel.json'
+      - 'supabase/**'
+      - 'scripts/vercel/**'
+      - 'DEPLOY-VERCEL.md'
       - 'scripts/build-coach-assets.mjs'
       - 'scripts/build-coach-library.mjs'
       - 'scripts/build-api-docs.mjs'
@@ -88,6 +96,20 @@ jobs:
 
   api:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: opengym
+          POSTGRES_PASSWORD: opengym
+          POSTGRES_DB: opengym
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U opengym -d opengym"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

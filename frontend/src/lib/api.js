@@ -141,20 +141,13 @@ export async function apiBlob(path, { expectSize, idleMs = 30000, fetchImpl = gl
   const tooBig = status => failure('HTTP ' + status, 'too-large', status)
   // What loses the race may still reject afterwards, with nobody left listening.
   const orStall = p => { p.catch(() => {}); return Promise.race([p, stall]) }
-  arm()
-  try {
-    const r = await orStall(fetchImpl(mediaUrl(path), { headers: mediaHeaders(), cache: 'no-store', ...(ctl ? { signal: ctl.signal } : {}) }))
-    if (!r.ok) {
-      let body = null
-      try { body = await r.json() } catch { /* not JSON: a proxy's page */ }
-      throw Object.assign(new Error((body && body.error) || 'HTTP ' + r.status), { status: r.status, code: (body && body.code) || 'http', data: body || {} })
-    }
-    const announced = Number(r.headers?.get?.('content-length'))
-    if (Number.isFinite(announced) && announced > max) { ctl?.abort(); throw tooBig(r.status) }
-    const reader = r.body && typeof r.body.getReader === 'function' ? r.body.getReader() : null
+  async function collect(response) {
+    const announced = Number(response.headers?.get?.('content-length'))
+    if (Number.isFinite(announced) && announced > max) { ctl?.abort(); throw tooBig(response.status) }
+    const reader = response.body && typeof response.body.getReader === 'function' ? response.body.getReader() : null
     if (!reader) {
-      const b = await orStall(r.blob())
-      if (b.size > max) throw tooBig(r.status)
+      const b = await orStall(response.blob())
+      if (b.size > max) throw tooBig(response.status)
       return b
     }
     const parts = []
@@ -164,10 +157,43 @@ export async function apiBlob(path, { expectSize, idleMs = 30000, fetchImpl = gl
       const { done, value } = await orStall(reader.read())
       if (done) break
       n += value.length
-      if (n > max) { ctl?.abort(); throw tooBig(r.status) }
+      if (n > max) { ctl?.abort(); throw tooBig(response.status) }
       parts.push(value)
     }
     return new Blob(parts)
+  }
+  arm()
+  try {
+    const r = await orStall(fetchImpl(mediaUrl(path), { headers: mediaHeaders(), cache: 'no-store', ...(ctl ? { signal: ctl.signal } : {}) }))
+    if (!r.ok) {
+      let body = null
+      try { body = await r.json() } catch { /* not JSON: a proxy's page */ }
+      throw Object.assign(new Error((body && body.error) || 'HTTP ' + r.status), { status: r.status, code: (body && body.code) || 'http', data: body || {} })
+    }
+    const type = r.headers?.get?.('content-type') || ''
+    if (/json/i.test(type)) {
+      const data = await r.json()
+      // A file bigger than a function may return: a signed Storage URL, or same-origin ranges.
+      if (data && data.url) {
+        const signed = await orStall(fetchImpl(data.url, { cache: 'no-store', ...(ctl ? { signal: ctl.signal } : {}) }))
+        if (!signed.ok) throw Object.assign(new Error('HTTP ' + signed.status), { status: signed.status, code: 'http' })
+        return collect(signed)
+      }
+      if (data && data.chunked) {
+        const step = data.part || 2 * 1024 * 1024
+        const parts = []
+        for (let off = 0; off < (data.size || 0); off += step) {
+          arm()
+          const sep = path.includes('?') ? '&' : '?'
+          const part = await orStall(fetchImpl(mediaUrl(path + sep + 'offset=' + off + '&len=' + step), { headers: mediaHeaders(), cache: 'no-store', ...(ctl ? { signal: ctl.signal } : {}) }))
+          if (!part.ok) throw Object.assign(new Error('HTTP ' + part.status), { status: part.status, code: 'http' })
+          parts.push(await collect(part))
+        }
+        return new Blob(parts, { type: data.mime || '' })
+      }
+      throw failure(t('The server answered with something other than openGym data.'), 'bad-response', r.status)
+    }
+    return collect(r)
   } catch (e) {
     if (idle) throw timedOut()
     throw e
