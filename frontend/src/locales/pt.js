@@ -1802,7 +1802,7 @@ export default {
   'This folder can’t be used for backups.': 'Esta pasta não pode ser usada para cópias de segurança.',
   'openGym can no longer write to “{0}”, so copies go to Documents/openGym again. Choose the folder again to switch back.': 'O openGym já não consegue escrever em «{0}», por isso as cópias voltam a ir para Documents/openGym. Escolhe a pasta de novo para voltar a ela.',
   'openGym can no longer write to the chosen folder, so copies go to Documents/openGym again. Choose the folder again to switch back.': 'O openGym já não consegue escrever na pasta escolhida, por isso as cópias voltam a ir para Documents/openGym. Escolhe a pasta de novo para voltar a ela.',
-  // --- missed-workout nudge (lib/nudge.js; the push copy is mirrored in api/nudge-copy.js) ---
+  // --- missed-workout nudge (lib/nudge.js; the push copy is mirrored in server/nudge-copy.js) ---
   'Nudge me when I skip a planned workout': 'Avisa-me quando eu falhar um treino planeado',
   'Nudge tone': 'Tom do aviso',
   'Friendly': 'Amigável',

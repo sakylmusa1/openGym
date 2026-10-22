@@ -1,5 +1,5 @@
 // A note on a day you did not train (#261): "Sick", "Travelling", a line of your own. A day that
-// carries one is excused: the missed-day nudge (lib/nudge.js, and its server copy api/nudge.js)
+// carries one is excused: the missed-day nudge (lib/nudge.js, and its server copy server/nudge.js)
 // and the workout-day reminder leave it alone, and the calendar, the heatmap and the week strip
 // show it instead of an empty planned day.
 //

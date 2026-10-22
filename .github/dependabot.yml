@@ -1,6 +1,6 @@
 # Dependency updates, deliberately quiet.
 #
-# openGym is dependency-light on purpose: the frontend is React + Router + Zustand, and api/
+# openGym is dependency-light on purpose: the frontend is React + Router + Zustand, and server/
 # has two runtime dependencies. A default Dependabot setup would still open a PR per package
 # per week, which on a solo project means the alerts stop being read — the opposite of what
 # this is for. So: monthly, everything in an ecosystem grouped into a single PR, and a low
@@ -42,9 +42,9 @@ updates:
       - dependency-name: '@capacitor/*'
         update-types: ['version-update:semver-major']
 
-  # Backend — api/package.json (@simplewebauthn/server, web-push)
+  # Backend — server/package.json (@simplewebauthn/server, web-push)
   - package-ecosystem: npm
-    directory: /api
+    directory: /server
     schedule:
       interval: monthly
     open-pull-requests-limit: 3
@@ -58,9 +58,9 @@ updates:
         patterns: ['*']
         update-types: ['major']
 
-  # Base images — api/Dockerfile (node:22-alpine)
+  # Base images — server/Dockerfile (node:22-alpine)
   - package-ecosystem: docker
-    directory: /api
+    directory: /server
     schedule:
       interval: monthly
     open-pull-requests-limit: 1

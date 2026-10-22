@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest'
 import * as M from './sync-merge.js'
 import * as U from './units.js'
-import { stampPut } from '../../../api/sync-stamps.js'
+import { stampPut } from '../../../server/sync-stamps.js'
 
 const { mergeStates, stampWorkout, keepReset } = M
 const unitOps = []

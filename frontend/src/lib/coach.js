@@ -63,7 +63,7 @@ export const coachAvailable = (config, user, { demo, mobile, coachMode } = {}) =
     : demo ? true : !!(config?.coach?.enabled && user)
 
 // What each data category means, in the user's words. Rendered from the same list the payload
-// builder uses (api/coach/core/categories.js), so the screen cannot promise less than leaves.
+// builder uses (server/coach/core/categories.js), so the screen cannot promise less than leaves.
 // Each entry returns [title, detail] in the current language, through literal t() calls so
 // check-source-strings sees every key. When the screens passed these to t() as variables the
 // checker could not see them, and eight of the ten had no translation in any pack.
@@ -79,7 +79,7 @@ export const hasConsent = S => !!S?.coach?.consent?.agreedAt && S.coach.consent.
 /* ============================ plan fingerprint ============================ */
 
 /**
- * Mirror of `canonicalPlan` in api/coach/payload.js — field for field, including the rule
+ * Mirror of `canonicalPlan` in server/coach/payload.js — field for field, including the rule
  * that every absent value is written out as a zero so "no weight" and "0 kg" cannot hash
  * apart, and that `bodyweight`/`side` are *resolved* against the catalogue rather than copied,
  * so a plan that says nothing and an exercise the dataset already calls bodyweight hash the
@@ -112,7 +112,7 @@ export function canonicalPlan(S) {
   }
 }
 
-/** FNV-1a-ish 64-bit fingerprint. Mirror of hashPlan in api/coach/core/plan-hash.js. */
+/** FNV-1a-ish 64-bit fingerprint. Mirror of hashPlan in server/coach/core/plan-hash.js. */
 export function hashPlan(plan) {
   const canon = JSON.stringify({
     routines: (plan?.routines || []).map(r => [r.id, r.name, r.prog, (r.ex || []).map(e =>
@@ -139,7 +139,7 @@ export const planHash = S => hashPlan(canonicalPlan(S))
 const findRoutine = (S, id) => (S.routines || []).find(r => r.id === id) || null
 const findEx = (routine, id) => (routine?.ex || []).find(e => e.id === id) || null
 
-// The Coach reads a routine's name cut at 80 characters (NAME_MAX in api/coach/core/payload.js),
+// The Coach reads a routine's name cut at 80 characters (NAME_MAX in server/coach/core/payload.js),
 // and the server copies that cut name into a rename's `before`. Compared whole, a longer name
 // never matched, and every rename of it was shown as already overtaken by an edit. Not imported
 // from payload.js, which would pull the exercise catalogue into the main bundle; coach.test.js

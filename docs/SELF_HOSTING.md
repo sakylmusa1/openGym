@@ -68,7 +68,7 @@ sent as an `Authorization` header rather than a cookie. Two consequences worth k
 you're poking at the API directly:
 
 - `POST /api/pair/create` (needs a session) and `POST /api/pair/redeem` (doesn't) implement
-  this — see `api/server.js`. The returned token is the exact same signed value a cookie
+  this — see `server/server.js`. The returned token is the exact same signed value a cookie
   carries, so "sign out everywhere" invalidates it too — and a phone has no passkey to sign
   back in with, so every paired phone has to be **paired again** afterwards. The phone says
   so ("Your server no longer accepts this phone") and keeps its data until it is.

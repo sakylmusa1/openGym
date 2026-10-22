@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "buildCommand": "node scripts/vercel/build.mjs",
-  "installCommand": "npm ci --prefix frontend && npm ci --prefix api --omit=optional",
+  "installCommand": "npm ci --prefix frontend && npm ci --prefix server --omit=optional",
   "crons": [
     { "path": "/api/cron/daily", "schedule": "0 4 * * *" }
   ],

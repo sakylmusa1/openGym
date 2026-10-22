@@ -160,8 +160,8 @@ export const JOB_ERRORS = {
   get restart() { return t('The server restarted while the Coach was thinking.') },
   get nostate() { return t('The Coach couldn’t read your training data.') },
   get noworkout() { return t('There’s no workout to look at yet. Log one first.') },
-  // The refusal at enqueue when the process cannot drop privileges (api/coach/jobs.js). The same
-  // words as api/coach/routes.js USER_ERROR.unprivileged; what to fix goes to the admin card.
+  // The refusal at enqueue when the process cannot drop privileges (server/coach/jobs.js). The same
+  // words as server/coach/routes.js USER_ERROR.unprivileged; what to fix goes to the admin card.
   get unprivileged() { return t('The Coach is switched off on this instance for safety reasons.') },
   get internal() { return t('Something went wrong on the server.') }
 }

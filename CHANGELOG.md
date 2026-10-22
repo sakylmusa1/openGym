@@ -1035,7 +1035,7 @@ bar weights, the rest-day line and the rewritten admin dashboard are all new to 
 ## v1.2.16 — 2026-09-03
 
 - **The web image builds again.** v1.2.15's tag pipeline published the API image and the APK
-  but the web image failed to build: the frontend imports the Coach's core from `api/coach/core`,
+  but the web image failed to build: the frontend imports the Coach's core from `server/coach/core`,
   and `web/Dockerfile` copied only `frontend/`. The image now carries that directory at the same
   relative position it has in the repository, and a new `build:web-check` job builds the web
   image on every merge request that touches the frontend, the Dockerfile or the core — the API
@@ -1144,10 +1144,10 @@ rewritten in plain language — those three shipped to main earlier and are here
   Nothing AI-related is loaded until one of the two is chosen; a BYOK key lives in the
   platform's secure storage, never in the app's state; a local daily cap bounds what you spend.
 - The Coach's core — payload builder, validator, parser, prompts, plan fingerprint and the
-  invoke → parse → validate → repair loop — moved to `api/coach/core/`, runtime-neutral, so the
+  invoke → parse → validate → repair loop — moved to `server/coach/core/`, runtime-neutral, so the
   phone imports the same code the server runs. The exercise catalogue and the prompts are
   generated ES modules (`scripts/build-coach-assets.mjs --check` in CI), and
-  `api/scripts/check-core-loadable.mjs` proves the core still loads under bare node.
+  `server/scripts/check-core-loadable.mjs` proves the core still loads under bare node.
 - Validator hardening: the lifter's own custom exercises are now accepted when the model
   names them (they were offered to it and then refused, burning the one repair round); ids that
   are object keys downstream (`__proto__`, `constructor`) are refused; weight and speed have
@@ -1504,7 +1504,7 @@ since the GitHub account went.
 ### Housekeeping
 
 - The self-hosting docs, `SECURITY.md` and `.env.example` cover the activity log, and the
-  `api/server.js` line references in `SECURITY.md` are accurate again.
+  `server/server.js` line references in `SECURITY.md` are accurate again.
 - Every repository link in the README, the docs, the app and the website points at GitLab, and
   the website's live star/release numbers come from GitLab's API.
 

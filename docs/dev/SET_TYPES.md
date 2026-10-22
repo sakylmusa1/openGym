@@ -170,7 +170,7 @@ weight-based to begin with.
 
 ## Persistence
 
-No backend or schema change was needed. `api/server.js` writes `state-<uid>.json` verbatim with
+No backend or schema change was needed. `server/server.js` writes `state-<uid>.json` verbatim with
 no set-shape validation beyond "is an object". The MCP server (`mcp/src`) re-imports the same
 `workoutVolume`/`onerm.js`/`muscles.js` helpers from `frontend/src/lib` rather than duplicating
 them, so its reported volume/1RM figures pick up the fix automatically too.

@@ -3,7 +3,7 @@
  * The caps are the server's to set (MEDIA_* in .env, handed out as `media` in GET /api/config):
  * when the server says, its numbers win, so the editor refuses a file here rather than after an
  * upload the server would refuse anyway. Without a server — a guest, the demo, a phone in local
- * mode — the defaults below apply; they are the server's defaults too (api/media.js mediaLimits).
+ * mode — the defaults below apply; they are the server's defaults too (server/media.js mediaLimits).
  * Every MB is 2^20 bytes on both sides, and the server's values may be fractional.
  */
 

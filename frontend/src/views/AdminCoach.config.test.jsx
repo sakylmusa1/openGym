@@ -11,7 +11,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 const mocks = vi.hoisted(() => ({
   refreshConfig: vi.fn(async () => ({})),
   calls: [],
-  // The shape GET /api/admin/coach answers with (api/coach/routes.js), trimmed to one provider.
+  // The shape GET /api/admin/coach answers with (server/coach/routes.js), trimmed to one provider.
   status: {
     disabledByEnv: false, enabled: false, provider: 'anthropic',
     providers: [{ id: 'anthropic', label: 'Anthropic API', runtime: 'HTTPS', apiKey: true, http: true, connected: false }],

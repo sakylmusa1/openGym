@@ -1,14 +1,14 @@
-/* api/sync-stamps.js is a hand copy of the stamping rules here (sync-merge.js), for the server's
+/* server/sync-stamps.js is a hand copy of the stamping rules here (sync-merge.js), for the server's
    PUT /api/data. The two must agree; and what the server stamps for a writer that does not stamp
    its own changes (an older app, an API planner) must hold in this side's merge. */
 import { describe, expect, it } from 'vitest'
-import * as S from '../../../api/sync-stamps.js'
+import * as S from '../../../server/sync-stamps.js'
 import { highestStamp, mergeDeletions, mergeEdits, mergeStates, stampChange, stampEntry, stampEdits, stampRestore } from './sync-merge.js'
 
 const clone = v => JSON.parse(JSON.stringify(v))
 function rng(seed) { let s = seed >>> 0 || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >> 17; s ^= s << 5; s >>>= 0; return s / 4294967296 } }
 
-describe('api/sync-stamps.js matches sync-merge.js', () => {
+describe('server/sync-stamps.js matches sync-merge.js', () => {
   it('on random records and entries', () => {
     for (let seed = 1; seed < 300; seed++) {
       const R = rng(seed)

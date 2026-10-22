@@ -10,7 +10,7 @@ buildNpmPackage rec {
   pname = "opengym-frontend";
   inherit version;
 
-  # The frontend imports api/coach/core/* (../../../api/coach/core/…), so the build
+  # The frontend imports server/coach/core/* (../../../server/coach/core/…), so the build
   # needs the repo root — same layout the Dockerfile uses (see web/Dockerfile).
   src = ./../..;
   npmRoot = "frontend";

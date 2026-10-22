@@ -37,7 +37,7 @@ server {
     # as /api/anything.json would be matched by the \.(js|css|json|html)$ block instead and be
     # looked for on disk rather than proxied.
     location ^~ ${BASE_PATH}/api/ {
-        # Match the API's own body limit (MAX_BODY in api/server.js): the whole workout history
+        # Match the API's own body limit (MAX_BODY in server/server.js): the whole workout history
         # travels in one PUT /api/data, and nginx's 1 MiB default would answer 413 here before the
         # API ever saw it — a sync that silently stops once the history grows past 1 MiB.
         client_max_body_size 5m;
@@ -77,7 +77,7 @@ server {
         proxy_send_timeout 300s;
     }
 
-    # Photos and videos of custom exercises (PUT and GET under api/media/). Nginx picks the
+    # Photos and videos of custom exercises (PUT and GET under /api/media/). Nginx picks the
     # longest matching prefix, so this block takes those requests from the one above wherever it
     # sits. Same upstream, resolver and headers; what differs is the body. A video may be tens of
     # MB, so the cap is MEDIA_UPLOAD_MAX (48m by default; keep it above MEDIA_VIDEO_MAX_MB)

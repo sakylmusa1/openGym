@@ -69,7 +69,7 @@ function installFetch() {
   })
 }
 const refusing = () => json(401, { error: 'not signed in' })
-// The paired server, as api/server.js answers: a revision per document, 409 on a stale baseRev.
+// The paired server, as server/server.js answers: a revision per document, 409 on a stale baseRev.
 function serverWith(doc) {
   const srv = { doc: clone(doc), puts: [] }
   srv.handle = (path, method, init) => {

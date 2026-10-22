@@ -1,8 +1,8 @@
 // Missed-workout nudge — one playful notification on the evening of a planned day that went by
 // without a workout. Opt-in, under the workout-day reminder (S.reminder.nudge, S.reminder.tone).
 //
-// The self-hosted app sends it as a web push from the server (api/nudge.js, a hand copy of the
-// rules below, as api/queue.js is of lib/queue.js); the mobile build schedules it as a native
+// The self-hosted app sends it as a web push from the server (server/nudge.js, a hand copy of the
+// rules below, as server/queue.js is of lib/queue.js); the mobile build schedules it as a native
 // local notification (lib/mobile.js). Both answer the same three questions the same way:
 //
 //   WHEN  — at 20:00 on the user's clock, or 2 hours after the reminder when that is later, and
@@ -20,7 +20,7 @@
 //
 // Copy: three tones, one title and four lines each. The line is chosen by the date, so a day
 // always gets the same one and consecutive days rotate. Keys are the English source strings;
-// api/nudge-copy.js carries the server's copy of their translations (a test keeps the two equal).
+// server/nudge-copy.js carries the server's copy of their translations (a test keeps the two equal).
 import { isoOf } from './format.js'
 import { effectiveRoutineIds } from './history.js'
 import { queueLiveOn } from './queue.js'

@@ -328,7 +328,7 @@ excluded routine, through `buildSessionEntries`.
 ## 7. Coach — read-context & plan fingerprint
 
 From [ENG-15](https://linear.app/factical/issue/ENG-15). The plan fingerprint is computed in
-two runtimes that share no build step (`frontend/src/lib/coach.js` and `api/coach/core/`) and
+two runtimes that share no build step (`frontend/src/lib/coach.js` and `server/coach/core/`) and
 must stay byte-for-byte matched. See `docs/AI_COACH.md` for the feature overview.
 
 **Canonical form** — one string form shared by both runtimes. `canonicalPlan` (both) and
@@ -358,28 +358,28 @@ keys; only the inner routine list is order-significant. `+` matches the ENG-12 d
 **Model payload.** `build()` sends `plan: cleanPlan(S)`, so `p.plan.week` values become
 `string[]`. The model is told, and told it still cannot compose a combined day:
 
-- `api/coach/prompts/common.md`, plan-reading notes — add: *"`plan.week` maps a weekday to
+- `server/coach/prompts/common.md`, plan-reading notes — add: *"`plan.week` maps a weekday to
   the list of routine ids trained that day — usually one; a combined day lists several, in
   training order."*
-- `api/coach/prompts/review.md`, the `week` change-op row — add: a proposed `week` change
+- `server/coach/prompts/review.md`, the `week` change-op row — add: a proposed `week` change
   names **exactly one** routine (or `"rest"` / `null`) and **replaces** the day; the Coach
   can move a day's routine but cannot build a combined day. On a combined day, `before` is
   the list, `after` is a single id.
 
-**`api/` change list:**
+**`server/` change list:**
 
 | File | Change |
 |---|---|
-| `api/coach/core/payload.js` — `canonicalPlan` | day value → `[].concat(S.week[d])`; filter `S.week?.[d]?.length` |
-| `api/coach/core/payload.js` — `cleanPlan` | same normalisation (stays ≡ `canonicalPlan` — the parity `coach.test.js` pins) |
-| `api/coach/core/payload.js` — `aggregates` | `plannedDays`: `filter(k => S.week[k]?.length)` — a combined day already counts as 1 |
-| `api/coach/core/plan-hash.js` — `hashPlan` | week join → `k + '=' + plan.week[k].join('+')` |
-| `api/coach/prompts/common.md` | one plan-reading bullet |
-| `api/coach/prompts/review.md` | `week` change-op clause |
+| `server/coach/core/payload.js` — `canonicalPlan` | day value → `[].concat(S.week[d])`; filter `S.week?.[d]?.length` |
+| `server/coach/core/payload.js` — `cleanPlan` | same normalisation (stays ≡ `canonicalPlan` — the parity `coach.test.js` pins) |
+| `server/coach/core/payload.js` — `aggregates` | `plannedDays`: `filter(k => S.week[k]?.length)` — a combined day already counts as 1 |
+| `server/coach/core/plan-hash.js` — `hashPlan` | week join → `k + '=' + plan.week[k].join('+')` |
+| `server/coach/prompts/common.md` | one plan-reading bullet |
+| `server/coach/prompts/review.md` | `week` change-op clause |
 
-`api/coach/jobs.js:315` (calls the fixed helpers), `api/coach/core/validate.js` (validates
+`server/coach/jobs.js:315` (calls the fixed helpers), `server/coach/core/validate.js` (validates
 the model's scalar proposed `week`; an array `beforeValue` for a combined day is
-display-only), the `api/coach/routes.js` handlers, and `cadence.js` (reads `cadence.weekly`)
+display-only), the `server/coach/routes.js` handlers, and `cadence.js` (reads `cadence.weekly`)
 all need **no change**.
 
 **Frontend `lib/coach.js` change list:**
@@ -547,7 +547,7 @@ helper in `lib/` with a unit test beside it**. New/changed helpers and their cov
 22. Populated `week` round-trips (build → parse → merge) with arrays intact; a legacy scalar
     bundle value is tolerated.
 
-### Coach — `api/test/jobs.test.js` + frontend `coach.test.js`
+### Coach — `server/test/jobs.test.js` + frontend `coach.test.js`
 
 23. Shared fixture with a combined day (`week: {1:['r1','r2']}`) — client `hashPlan` ===
     server `hashPlan`.

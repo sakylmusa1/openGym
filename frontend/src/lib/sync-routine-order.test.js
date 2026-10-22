@@ -2,10 +2,10 @@
    to the other device's copy whenever that one was newer as a whole (a weigh-in logged later), so
    the list jumped back. The order is now a choice of its own (`edited.routineOrder`), merged like
    a setting; a routine only one copy has still goes next to its neighbour there. The server stamps
-   it for a writer that does not (api/sync-stamps.js), and keeps a newer order from an older copy. */
+   it for a writer that does not (server/sync-stamps.js), and keeps a newer order from an older copy. */
 import { describe, expect, it } from 'vitest'
 import { mergeStates, orderMoved, stampChange } from './sync-merge.js'
-import * as S from '../../../api/sync-stamps.js'
+import * as S from '../../../server/sync-stamps.js'
 
 const clone = v => JSON.parse(JSON.stringify(v))
 const T = 1_800_000_000_000

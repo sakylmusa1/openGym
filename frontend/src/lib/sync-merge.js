@@ -875,7 +875,7 @@ export function mergeStates(a0, b0, { prefer } = {}) {
   delete out._rev
   delete out._wid
   delete out._wids
-  delete out._unstamped   // the server's own notes (api/sync-stamps.js), never a client's
+  delete out._unstamped   // the server's own notes (server/sync-stamps.js), never a client's
   delete out._prior
   // The accent fields end up in CSS: whatever either copy brought, only a clean value goes on.
   sanitizeAccent(out)

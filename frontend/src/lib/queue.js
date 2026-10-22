@@ -30,7 +30,7 @@
 // is NEXT, never what counts as DONE, so weekTally, the reminders' tally and whatever a planner
 // reads back are untouched.
 //
-// DONE RULE — kept word for word with the api's reminder copy (api/queue.js), and the rule a
+// DONE RULE — kept word for word with the api's reminder copy (server/queue.js), and the rule a
 // planner has to mirror, so nobody disagrees about which session is next: a session is done
 // when any FINISHED workout on that routine exists after the week was applied. Missed sets are
 // the planner's business. `S.active` is not in `S.workouts`, so a session in progress never

@@ -8,7 +8,7 @@ import { lazyAssets, stampSw } from './scripts/sw-stamp.mjs'
 
 const backend = process.env.API_TARGET || 'http://127.0.0.1:3000'
 // The API refuses a state-changing request that a browser sent from anywhere other than its own
-// ORIGIN (the CSRF guard in api/server.js). The dev server is on a different port, so the page's
+// ORIGIN (the CSRF guard in server/server.js). The dev server is on a different port, so the page's
 // real Origin is not ORIGIN — modern browsers get through on Sec-Fetch-Site: same-origin, and
 // presenting the expected Origin here covers the ones that don't send it. Match your .env if you
 // changed ORIGIN: API_ORIGIN=https://gym.example.com npm run dev
@@ -105,7 +105,7 @@ export default defineConfig({
   plugins: [react(), umami, flavor, swStamp, catalogueMedia],
   base: './',
   server: {
-    // The Coach's core (payload, validator, prompts, HTTP adapters) lives in ../api/coach/core
+    // The Coach's core (payload, validator, prompts, HTTP adapters) lives in ../server/coach/core
     // and is imported by the phone build. vite build and vitest already reach it; the dev
     // server needs to be told the workspace is wider than frontend/.
     fs: { allow: ['..'] },

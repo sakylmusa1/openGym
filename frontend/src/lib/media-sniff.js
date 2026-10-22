@@ -3,7 +3,7 @@
  * Pure byte work on Uint8Arrays, with no DOM and no imports, so all of it runs in the tests.
  *
  *  - sniffKind: the type from the first bytes alone, never from the name or file.type. It follows
- *    api/media.js sniffMedia rule for rule, so a device never uploads something the server would
+ *    server/media.js sniffMedia rule for rule, so a device never uploads something the server would
  *    refuse, and additionally knows HEIC/AVIF photos, which are only ever re-encoded.
  *  - imageDims: a photo's size from its header, for the pixel guard that runs before any decode.
  *  - inspectGif / cleanGif: a GIF's frames and length, and a copy without the blocks that carry
@@ -30,7 +30,7 @@ const u24le = (b, o) => b[o] | (b[o + 1] << 8) | (b[o + 2] << 16)
 const u64be = (b, o) => u32be(b, o) * 4294967296 + u32be(b, o + 4)
 const i32be = (b, o) => u32be(b, o) | 0
 
-// The same list as api/media.js MP4_BRANDS: brands nobody vouched for (M4A audio, a 3GPP brand
+// The same list as server/media.js MP4_BRANDS: brands nobody vouched for (M4A audio, a 3GPP brand
 // the server does not know) are refused on both sides.
 const MP4_BRANDS = new Set([
   'isom', 'iso2', 'iso3', 'iso4', 'iso5', 'iso6', 'mp41', 'mp42', 'avc1', 'M4V ', 'M4VP',

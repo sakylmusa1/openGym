@@ -3,7 +3,7 @@
  *
  * The state never carries the bytes, only a MediaRef of a few hundred bytes (see the shape
  * below). The bytes live in the device's local media store (lib/media-store.js) and, signed in,
- * on the server under DATA_DIR/uploads/<uid>/<sha256>.<ext> (api/media.js). Everything here is
+ * on the server under DATA_DIR/uploads/<uid>/<sha256>.<ext> (server/media.js). Everything here is
  * pure and has no imports, so the store, the sync, the editor and the tests can all use it.
  *
  *   MediaRef = { kind: 'image'|'gif'|'video', hash, mime, size, width, height,
@@ -17,7 +17,7 @@
 
 export const HASH_RE = /^[0-9a-f]{64}$/
 
-/* The seven types that are ever stored, the same list as api/media.js MEDIA_TYPES. `playExt` is
+/* The seven types that are ever stored, the same list as server/media.js MEDIA_TYPES. `playExt` is
    the name a file gets in the phone's own folder: the WebView's local server types a file by its
    extension, and it hands out .mov as something the <video> element will not play, while the same
    bytes named .mp4 play (a MOV and an MP4 are the same container). */
@@ -133,8 +133,8 @@ export function stateMediaRefs(state) {
 }
 
 /**
- * Every blob hash a state refers to, the same answer as api/media.js referencedHashes (the shared
- * fixture api/test/fixtures/media-refs.json pins both): customEx[].media and every entry of
+ * Every blob hash a state refers to, the same answer as server/media.js referencedHashes (the shared
+ * fixture server/test/fixtures/media-refs.json pins both): customEx[].media and every entry of
  * workouts[].media. Deliberately looser than normalizeMediaRef and workoutMediaOf: each hash and
  * poster hash counts on its own as long as it is well-formed, and a workout's list counts past
  * its cap, because this set decides what is KEPT, and keeping too much is the safe side.

@@ -10,8 +10,8 @@ import { registerCustom } from './exercises.js'
 
 // The two runtimes share no build step, so the client's copy of the fingerprint logic is
 // checked against the server's actual source rather than against a transcribed expectation.
-import * as serverPayload from '../../../api/coach/core/payload.js'
-import { hashPlan as serverHashPlan } from '../../../api/coach/core/plan-hash.js'
+import * as serverPayload from '../../../server/coach/core/payload.js'
+import { hashPlan as serverHashPlan } from '../../../server/coach/core/plan-hash.js'
 
 const state = (over = {}) => ({
   unit: 'kg', lang: 'en', customEx: [], workouts: [], bodyweight: [], exWeights: {}, dayPlan: {},
@@ -166,7 +166,7 @@ describe('staleness', () => {
   })
 
   it('a rename of a routine whose name is longer than the Coach reads is not shown as stale', async () => {
-    const { validateReview } = await import('../../../api/coach/core/validate.js')
+    const { validateReview } = await import('../../../server/coach/core/validate.js')
     const S = state()
     S.routines[0].name = 'Upper body, heavy day — '.repeat(6)
     // The real path: the server's payload cuts the name, and the validator copies what the
@@ -195,7 +195,7 @@ describe('staleness', () => {
 
 describe('applying changes', () => {
   it('has an implementation for every type the server can send', async () => {
-    const { CHANGE_TYPES: serverTypes } = await import('../../../api/coach/core/validate.js')
+    const { CHANGE_TYPES: serverTypes } = await import('../../../server/coach/core/validate.js')
     expect([...CHANGE_TYPES].sort()).toEqual([...serverTypes].sort())
   })
 

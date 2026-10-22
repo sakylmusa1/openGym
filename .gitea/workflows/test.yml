@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # node:22-alpine in web/Dockerfile and api/Dockerfile — CI must match production.
+      # node:22-alpine in web/Dockerfile and server/Dockerfile — CI must match production.
       - uses: actions/setup-node@v4
         with:
           node-version: 22

@@ -14,7 +14,7 @@ License: AGPL-3.0-or-later.
 ```
 frontend/  React 19 + Vite app (src/views, src/components, src/store, src/lib). Builds to static files.
            android/ + ios/ are the Capacitor shells for the standalone mobile app (docs/MOBILE.md).
-api/       backend — server.js (Node, no framework), deps: @simplewebauthn/server, web-push.
+server/    backend — server.js (Node, no framework), deps: @simplewebauthn/server, web-push.
            coach/ is the optional AI coach; openapi.yaml documents every route.
 web/       multi-stage Dockerfile (builds frontend → nginx) + nginx.conf.template (serves app, proxies /api).
 mcp/       optional MCP server — read-only stdio bridge exposing a user's workouts/1RM/muscle
@@ -44,7 +44,7 @@ npx vitest run src/lib/progression.test.js   # single file
 npx vitest run -t "some test name"           # single test by name
 
 # API and MCP server tests
-cd api && npm test
+cd server && npm test
 cd mcp && npm test
 
 # Production build
@@ -57,7 +57,7 @@ TypeScript — match the existing style by hand.
 
 GitHub (`github.com/DuarteSantos8/openGym`) is the home of the project; `.github/workflows/mirror.yml`
 pushes `main` and `v*` tags to the GitLab mirror. Pull requests are gated by
-`.github/workflows/test.yml` on Node 22 — the same version as `web/Dockerfile` / `api/Dockerfile`
+`.github/workflows/test.yml` on Node 22 — the same version as `web/Dockerfile` / `server/Dockerfile`
 (`node:22-alpine`): the frontend, api and MCP suites, the locale checks, and building and booting
 both api image targets. GitLab CI on the mirror (`.gitlab-ci.yml`) builds the release artifacts:
 the signed Android APK, the multi-arch images and the SBOMs. Never push or merge on GitLab
@@ -93,7 +93,7 @@ directly; the mirror is fast-forward only.
   `frontend/ios` (see `docs/MOBILE.md`); `mobile.js` in `lib/` gates native-only behavior (file
   persistence, local notifications, wake lock) behind a `MOBILE` flag.
 
-### API (`api/server.js`)
+### API (`server/server.js`)
 
 Single file, no framework, plain `node:http`. Requests are dispatched through a `routes` object
 keyed by `'METHOD /path'` (e.g. `routes['GET /api/health']`) matched against `req.method + ' ' +
@@ -136,7 +136,7 @@ output), `api`, `web` (multi-stage build of `frontend/` served by nginx, which a
 ## Guidelines from CONTRIBUTING.md worth knowing before changing code
 
 - **Dependency-light is a hard constraint, not a preference.** Frontend: React + Router + Zustand
-  and nothing else. `api/`: two dependencies total. New dependencies are a hard sell either side.
+  and nothing else. `server/`: two dependencies total. New dependencies are a hard sell either side.
 - Don't commit `media/` or `data/` (gitignored).
 - Training-logic changes (progression, 1RM, session read-back) need a unit test in `src/lib`
   beside the code, not just manual clicking-through.

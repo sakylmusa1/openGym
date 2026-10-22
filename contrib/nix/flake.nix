@@ -198,7 +198,7 @@
           shellHook = ''
             echo "openGym dev shell (Node.js $(node --version))"
             echo "  cd frontend && npm install && npm run dev"
-            echo "  cd api && npm install && node server.js"
+            echo "  cd server && npm install && node server.js"
           '';
         };
       }

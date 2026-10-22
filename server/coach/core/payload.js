@@ -19,7 +19,7 @@ export const CONTRACT = 1;
 export const MAX_WEEKS = 12;
 export const MAX_SESSIONS = 60;
 // The most a session note can be: the app's own cap (frontend/src/lib/history.js NOTE_MAX, pinned
-// by api/test/payload-parity.test.js), so a note the athlete wrote arrives whole and the bound only
+// by server/test/payload-parity.test.js), so a note the athlete wrote arrives whole and the bound only
 // holds for a document edited outside the app. It was 300 here, and a 500-character note reached
 // the model cut off mid-sentence.
 export const NOTE_MAX = 500;
@@ -125,7 +125,7 @@ export { DATA_CATEGORIES } from './categories.js';
    against the frontend's own copies over a shared table of configs, so the duplicate cannot
    drift silently — which it otherwise would have, quietly, when v1.2.4 taught the app about
    bodyweight work. isWarmupSet and readSession are duplicated the same way but were pinned by
-   nothing; api/test/payload-parity.test.js pins them now. It has to be a separate file: that
+   nothing; server/test/payload-parity.test.js pins them now. It has to be a separate file: that
    test imports the frontend's own readSession, and a vitest test cannot import into a
    node:test file or back. */
 export const modeOf = (cfg, ex) => {
@@ -476,7 +476,7 @@ export function workoutMeta(S, workoutId) {
  *
  * `handle` is the opaque per-profile pseudonym the payload carries instead of a uid. It is
  * supplied rather than derived because the two runtimes mint it differently: the server keys
- * an HMAC on its instance secret (api/coach/handle.js), the phone draws a random one once and
+ * an HMAC on its instance secret (server/coach/handle.js), the phone draws a random one once and
  * keeps it. Either way it is 16 characters and never the uid.
  */
 export function build(S, opts = {}) {

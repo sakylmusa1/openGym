@@ -11,7 +11,7 @@ services:
     # `--build` matters: with an `image:` also set, compose would otherwise pull the prebuilt
     # default rather than build the coach one.
     build:
-      context: ./api
+      context: ./server
       target: ${API_TARGET:-default}
     restart: unless-stopped
     env_file: .env

@@ -17,7 +17,7 @@
  * They are exported as LOCKDOWN and asserted by value in adapters.test.js, so re-enabling one
  * is a red build rather than a quiet capability grant.
  *
- * The import is lazy on purpose. The default image ships without the SDK (see api/Dockerfile),
+ * The import is lazy on purpose. The default image ships without the SDK (see server/Dockerfile),
  * and an absent runtime has to be an ordinary reportable state — check() says so, isConnected()
  * goes false, and no Coach UI is mounted — rather than a boot crash for every instance that
  * never asked for the feature.

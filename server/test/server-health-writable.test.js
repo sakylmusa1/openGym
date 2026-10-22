@@ -1,6 +1,6 @@
 /* GET /api/health used to answer `{"ok":true}` as long as the process was alive — including on a
    full disk or a bind mount that had come back read-only, where every write path in the server is
-   broken and the container's healthcheck (`wget --spider`, api/Dockerfile) still reads healthy.
+   broken and the container's healthcheck (`wget --spider`, server/Dockerfile) still reads healthy.
    It writes a probe file under DATA_DIR now, and answers 503 when it cannot. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

@@ -5,7 +5,7 @@
 // step (ProveOwner) that Settings asks for before a way in is added or removed, where the
 // password is one of the two answers — and the optional sign-in e-mail a profile may type there
 // instead of its name (EmailRow). Passkeys stay the default wherever this appears; the rules
-// themselves are the server's (api/password.js and the password block in api/server.js), this
+// themselves are the server's (server/password.js and the password block in server/server.js), this
 // only words them.
 import { useEffect, useRef, useState } from 'react'
 import { useStore, hasData } from '../store/useStore.js'
@@ -16,14 +16,14 @@ import { api, webauthnOK, passkeyAssertion, passwordLogin, passwordRegister, pas
 import { askAddDeviceData } from '../sheets.jsx'
 import { Row, Button } from './ui.jsx'
 
-// The server's floor (api/password.js MIN_LENGTH), checked here first so the common mistake is
+// The server's floor (server/password.js MIN_LENGTH), checked here first so the common mistake is
 // answered without a round trip. The server still decides.
 export const MIN_PASSWORD = 10
 export const passwordOn = config => !!config?.password_login
-// An address the way the server stores and compares it (nameKey in api/password.js): NFKC,
+// An address the way the server stores and compares it (nameKey in server/password.js): NFKC,
 // trimmed, lower-cased.
 export const foldEmail = s => String(s || '').normalize('NFKC').trim().toLowerCase()
-// The server's own check (normalizeEmail and EMAIL_RE in api/password.js), so what passes here is
+// The server's own check (normalizeEmail and EMAIL_RE in server/password.js), so what passes here is
 // what the server takes; a test holds the two together. The server still decides.
 const EMAIL_RE = /^[^\s@<>()[\]\\,;:"]{1,64}@(?=.{1,253}$)[^\s@<>()[\]\\,;:"._-][^\s@<>()[\]\\,;:"]*\.[^\s@<>()[\]\\,;:".]{2,}$/u
 export const looksLikeEmail = s => {
@@ -44,7 +44,7 @@ function fmtIn(sec) {
 }
 
 // The server's answer in the UI language. Every password route sends a stable `code` beside its
-// English message (api/openapi.yaml, Error.code); an answer without one is shown as it came.
+// English message (server/openapi.yaml, Error.code); an answer without one is shown as it came.
 export function passwordError(e) {
   const code = e?.data?.code
   if (e?.status === 429 || code === 'locked') return t('Too many attempts. Try again {0}.', fmtIn(e?.data?.retryAfter || 60))
@@ -222,7 +222,7 @@ function PasswordRegisterSheet({ close }) {
 export const openPasswordRegister = () => ui().openSheet(close => <PasswordRegisterSheet close={close} />)
 
 /* "Confirm it is you" — what the server asks before anything that adds or takes away a way in
-   (proveOwner in api/server.js): a passkey this profile already has, or its current password
+   (proveOwner in server/server.js): a passkey this profile already has, or its current password
    where that counts. `passkey`: the profile has one. `password`: its password counts as proof —
    set, and the instance takes passwords (GET /api/account/passkeys → `password`). Hands the body
    the server takes to `onProof` — for a removal, the removal itself — and shows the refusal,
@@ -387,7 +387,7 @@ export function PasswordSheet({ status, close, done }) {
   </>
 }
 
-/* Removing the password asks for the proof setting one does (proveOwner in api/server.js): a
+/* Removing the password asks for the proof setting one does (proveOwner in server/server.js): a
    copied session must not take away the owner's way in where passkeys do not work. The proof is
    the confirmation, so it is asked on the sheet that says what removing means — the password
    itself, or a passkey of this profile. Only offered while a passkey remains (the last way in

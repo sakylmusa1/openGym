@@ -9,7 +9,7 @@
 # module-resolution errors.
 FROM --platform=$BUILDPLATFORM node:22-alpine AS build
 # The frontend sits at /app/frontend, not /app: the Coach's runtime-neutral core lives in
-# api/coach/core and is imported from frontend/src as ../../../api/coach/core/*, so the two
+# server/coach/core and is imported from frontend/src as ../../../server/coach/core/*, so the two
 # have to keep the same relative position they have in the repository. Copying frontend/ alone
 # is exactly what made the v1.2.15 web image fail to build.
 WORKDIR /app/frontend
@@ -18,7 +18,7 @@ COPY frontend/package.json frontend/package-lock.json* ./
 # (@capacitor/assets -> sharp, a libvips download from GitHub) is for drawing app icons and has
 # timed out on the shared runners — a lockfile-ignoring `npm install` fallback is no answer to that.
 RUN npm ci --ignore-scripts
-COPY api/coach/core/ /app/api/coach/core/
+COPY server/coach/core/ /app/server/coach/core/
 COPY frontend/ ./
 # Which build this is, shown in the app as "1.3.8+<build>" next to the version. Without it every
 # image built between two releases calls itself the same thing, and "which build are you running?"
@@ -27,7 +27,7 @@ ARG APP_BUILD=""
 RUN APP_BUILD="$APP_BUILD" npm run build
 
 FROM nginxinc/nginx-unprivileged:alpine
-# Same reason as in api/Dockerfile: alpine fixes land faster than the nginx image is rebuilt.
+# Same reason as in server/Dockerfile: alpine fixes land faster than the nginx image is rebuilt.
 # The base's last instruction is USER 101, and apk then exits 99 — it cannot open its log as
 # that user. Upgrade as root, then switch back. 101 has to be the last USER in this file so
 # the entrypoint and the nginx master both stay uid 101. It can bind port 80 under Docker,

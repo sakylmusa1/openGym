@@ -18,7 +18,7 @@ import { deleteRoutineWithUndo, takeOutOfLoop } from './Plan.jsx'
 import { removeRoutineExercise } from './RoutineEdit.jsx'
 import { mergeStates, stampChange } from '../lib/sync-merge.js'
 import { saveRotation } from '../lib/rotation.js'
-import { stampPut } from '../../../api/sync-stamps.js'
+import { stampPut } from '../../../server/sync-stamps.js'
 
 const clone = v => JSON.parse(JSON.stringify(v))
 const S = () => useStore.getState().S

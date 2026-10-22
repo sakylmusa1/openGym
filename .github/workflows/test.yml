@@ -6,7 +6,7 @@ on:
   pull_request:
     paths:
       - 'frontend/**'
-      - 'api/**'
+      - 'server/**'
       - 'mcp/**'
       - 'vercel.json'
       - 'supabase/**'
@@ -16,13 +16,13 @@ on:
       - 'scripts/build-coach-library.mjs'
       - 'scripts/build-api-docs.mjs'
       - 'website/api.html'
-      - 'api/coach/prompts/**'
+      - 'server/coach/prompts/**'
       - '.github/workflows/test.yml'
   push:
     branches: [main, coach]
     paths:
       - 'frontend/**'
-      - 'api/**'
+      - 'server/**'
       - 'mcp/**'
       - 'vercel.json'
       - 'supabase/**'
@@ -32,7 +32,7 @@ on:
       - 'scripts/build-coach-library.mjs'
       - 'scripts/build-api-docs.mjs'
       - 'website/api.html'
-      - 'api/coach/prompts/**'
+      - 'server/coach/prompts/**'
       - '.github/workflows/test.yml'
   workflow_dispatch:
 
@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # node:22-alpine in web/Dockerfile and api/Dockerfile — CI must match production.
+      # node:22-alpine in web/Dockerfile and server/Dockerfile — CI must match production.
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -116,23 +116,23 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: api/package-lock.json
+          cache-dependency-path: server/package-lock.json
       # The Coach tests run on node:test and drive the in-repo fixture provider plus a local mock
       # of the Chat Completions shape, so the job needs no AI account and no network — but it does
       # need the api's own dependencies since the server-side fetch moved onto undici (same
       # install as test:api in .gitlab-ci.yml; the Agent SDK is optional and stays out).
       - run: npm ci --omit=optional
-        working-directory: api
+        working-directory: server
       - run: npm test
-        working-directory: api
+        working-directory: server
       # The api's copy of the exercise catalogue is generated and committed. A dataset change
       # that forgets to regenerate it would otherwise only surface as "the Coach can't find
       # that exercise" on somebody's instance.
       - run: node scripts/build-coach-assets.mjs --check
-      # website/api.html is generated from api/openapi.yaml and committed. Same reason.
+      # website/api.html is generated from server/openapi.yaml and committed. Same reason.
       - run: npm ci
       - run: node scripts/build-api-docs.mjs --check
-      - run: node api/scripts/check-core-loadable.mjs
+      - run: node server/scripts/check-core-loadable.mjs
 
   # Builds *and runs* both image targets. Building alone would not have caught the api image
   # shipping without coach/ — that image built perfectly and exited on boot. So each target has
@@ -144,13 +144,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - run: docker build --target default -t opengym-api:default ./api
-      - run: docker build --target coach   -t opengym-api:coach   ./api
+      - run: docker build --target default -t opengym-api:default ./server
+      - run: docker build --target coach   -t opengym-api:coach   ./server
       # No --target, exactly like docker-publish.yml. That workflow names no stage, so what it
       # ships is whatever Dockerfile stage happens to be last -- and that untargeted artifact,
       # not opengym-api:default above, is the image every self-hoster pulls as :latest. Build it
       # the same way here so the assertion below is about the thing we actually publish.
-      - run: docker build -t opengym-api:published ./api
+      - run: docker build -t opengym-api:published ./server
 
       - name: the image published as :latest has no AI runtime either
         run: |

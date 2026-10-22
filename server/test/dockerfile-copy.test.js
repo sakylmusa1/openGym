@@ -1,4 +1,4 @@
-/* The api image carries only the files named on api/Dockerfile's COPY line (plus coach/). A
+/* The api image carries only the files named on server/Dockerfile's COPY line (plus coach/). A
    root-level module that server.js imports and that line forgets is invisible to every test run
    from the source tree and shows up only when the published image boots — as
    ERR_MODULE_NOT_FOUND, on every instance that pulled it. So the line is checked here, for
@@ -30,6 +30,6 @@ test('every root-level module server.js needs is on the Dockerfile COPY line', (
   }
   assert.ok(needed.has('media.js'), 'the walk finds the media store');
   const missing = [...needed].filter(f => !copied.has(f));
-  assert.deepEqual(missing, [], `add ${missing.join(', ')} to the COPY line in api/Dockerfile`);
+  assert.deepEqual(missing, [], `add ${missing.join(', ')} to the COPY line in server/Dockerfile`);
   for (const f of copied) assert.ok(fs.existsSync(path.join(API, f)), `${f} is copied but does not exist`);
 });

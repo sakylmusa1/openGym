@@ -206,14 +206,14 @@ Details and build instructions: [docs/MOBILE.md](docs/MOBILE.md).
 </p>
 
 - **`frontend/`** is React 19 and Vite (React Router, Zustand), built to static files inside Docker.
-- **`api/`** is plain `node:http` with two dependencies: `@simplewebauthn/server` for passkeys and
+- **`server/`** is plain `node:http` with two dependencies: `@simplewebauthn/server` for passkeys and
   `web-push` for notifications. Everything is stored as JSON under `./data`.
 - **`web/`** builds the frontend and serves it with nginx, proxying `/api` so the whole app sits on
   one origin, which passkeys require.
 
 The training logic (progression rules, 1RM, how a logged session is read back) lives in pure
 functions under `frontend/src/lib/` with tests beside them. The HTTP API is documented as an
-OpenAPI spec in [`api/openapi.yaml`](api/openapi.yaml), browsable at
+OpenAPI spec in [`server/openapi.yaml`](server/openapi.yaml), browsable at
 [opengym.ch/api.html](https://opengym.ch/api.html).
 
 ### How sync works

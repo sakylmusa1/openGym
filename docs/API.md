@@ -1,14 +1,14 @@
 # HTTP API
 
-The complete openGym HTTP API — every route of `api/server.js`, with auth,
+The complete openGym HTTP API — every route of `server/server.js`, with auth,
 request/response schemas and the env-dependent behavior — is documented as a
 hand-written OpenAPI 3.1 spec:
 
-- **Spec (source of truth):** [`api/openapi.yaml`](../api/openapi.yaml)
+- **Spec (source of truth):** [`server/openapi.yaml`](../server/openapi.yaml)
 - **Browsable (Swagger UI):** https://opengym.ch/api.html
 
 Lint it after changing routes:
 
 ```sh
-npx --yes @redocly/cli lint api/openapi.yaml
+npx --yes @redocly/cli lint server/openapi.yaml
 ```
