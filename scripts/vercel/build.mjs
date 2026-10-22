@@ -52,9 +52,11 @@ const security = {
   'Referrer-Policy': 'same-origin',
   'Content-Security-Policy': "frame-ancestors 'none'"
 };
+// The daily cron is only in vercel.json. Repeating the same path and schedule
+// here fails the deploy with duplicated_cron_job. Security and cache headers
+// stay on these routes; vercel.json does not list them again.
 const config = {
   version: 3,
-  crons: [{ path: '/api/cron/daily', schedule: '0 4 * * *' }],
   routes: [
     { src: '/api(?:/(.*))?', dest: '/api', headers: security },
     {

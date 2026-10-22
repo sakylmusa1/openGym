@@ -5,35 +5,5 @@
   "installCommand": "npm ci --prefix frontend && npm ci --prefix server --omit=optional",
   "crons": [
     { "path": "/api/cron/daily", "schedule": "0 4 * * *" }
-  ],
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "same-origin" },
-        { "key": "Content-Security-Policy", "value": "frame-ancestors 'none'" }
-      ]
-    },
-    {
-      "source": "/(.*)\\.(js|css|json|html)",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
-      ]
-    },
-    {
-      "source": "/exercise-media/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=2592000, immutable" },
-        { "key": "Cross-Origin-Resource-Policy", "value": "same-origin" }
-      ]
-    },
-    {
-      "source": "/(.*)\\.(png|jpg|jpeg|gif|ico|svg|woff|woff2|webp|avif|mp4)",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=2592000, immutable" }
-      ]
-    }
   ]
 }
